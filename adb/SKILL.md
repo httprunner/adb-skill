@@ -1,9 +1,9 @@
 ---
-name: adb-automation
+name: adb
 description: Android device control and UI automation via ADB. Use when tasks involve connecting to devices/emulators, running adb shell commands, tapping/swiping, key events, text input, app launch, screenshots, or general device management through adb.
 ---
 
-# ADB Automation
+# ADB
 
 Use this skill to drive Android devices with `adb` for common device management and UI actions.
 
