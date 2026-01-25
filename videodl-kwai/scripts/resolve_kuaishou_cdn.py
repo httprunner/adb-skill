@@ -46,6 +46,33 @@ def resolve_short_url(url: str, timeout: float) -> str:
         return url
 
 
+def detect_unavailable_reason(url: str, timeout: float) -> Optional[str]:
+    try:
+        resp = requests.get(
+            url,
+            allow_redirects=True,
+            timeout=timeout,
+            headers={"User-Agent": UA_MOBILE},
+        )
+    except requests.RequestException as exc:
+        return f"http error: {exc}"
+    if not resp.text:
+        return None
+    text = resp.text
+    keywords = [
+        ("找不到该作品", "not found: removed or unavailable"),
+        ("作品已失效", "not found: removed or unavailable"),
+        ("该作品已被删除", "deleted by author"),
+        ("已下架", "removed from shelf"),
+        ("内容不可见", "content not visible"),
+        ("内容不存在", "content not found"),
+    ]
+    for needle, message in keywords:
+        if needle in text:
+            return message
+    return None
+
+
 def pick_download_url(info: dict) -> Optional[str]:
     for key in ("download_url", "download_urls", "url", "urls"):
         val = info.get(key)
@@ -98,7 +125,8 @@ def process_one(text: str, timeout: float) -> dict:
     try:
         cdn_url = resolve_cdn_url(resolved)
         if not cdn_url:
-            result["error_msg"] = "cdn url not found in videodl response"
+            reason = detect_unavailable_reason(resolved, timeout=timeout)
+            result["error_msg"] = reason or "cdn url not found in videodl response"
         else:
             result["cdn_url"] = cdn_url
     except Exception as exc:  # pylint: disable=broad-except

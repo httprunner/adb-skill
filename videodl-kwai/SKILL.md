@@ -48,6 +48,7 @@ Each line is:
 - Use `videodl.VideoClient(...).parsefromurl(...)` and choose the first usable URL in the response.
 - Preserve input order in batch mode.
 - Print progress to stderr and append JSONL output in batches for long runs.
+- When CDN resolution fails, attempt to detect common "removed/unavailable" messages and put them in `error_msg`.
 
 ## References
 
