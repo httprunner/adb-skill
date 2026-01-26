@@ -7,11 +7,13 @@ Output JSONL: {"url": "...", "cdn_url": "...", "error_msg": "..."}
 from __future__ import annotations
 
 import argparse
+import csv
 import json
 import re
+import signal
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Iterable, List, Optional
+from typing import Iterable, List, Optional, Sequence, Tuple
 
 import requests
 from videodl import videodl as videodl_lib
@@ -21,6 +23,15 @@ UA_MOBILE = (
     "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) "
     "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1"
 )
+
+_INTERRUPTED = False
+
+
+def _handle_sigint(signum, frame) -> None:
+    del signum, frame
+    global _INTERRUPTED
+    _INTERRUPTED = True
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
 
 
 def extract_first_url(text: str) -> Optional[str]:
@@ -134,16 +145,10 @@ def process_one(text: str, timeout: float) -> dict:
     return result
 
 
-def load_inputs(input_text: Optional[str], input_file: Optional[str]) -> List[str]:
+def load_inputs(input_text: Optional[str]) -> List[str]:
     items: List[str] = []
     if input_text:
         items.append(input_text)
-    if input_file:
-        with open(input_file, "r", encoding="utf-8") as handle:
-            for line in handle:
-                line = line.strip()
-                if line:
-                    items.append(line)
     return items
 
 
@@ -163,6 +168,43 @@ def write_jsonl(
             out.close()
 
 
+def load_csv_rows(
+    csv_path: str,
+    url_field: str,
+) -> Tuple[List[dict], List[str], str]:
+    with open(csv_path, "r", encoding="utf-8-sig", newline="") as handle:
+        reader = csv.reader(handle)
+        try:
+            header = next(reader)
+        except StopIteration:
+            return [], [], url_field
+
+        header = [col.strip() for col in header]
+        kept_indices = [idx for idx, col in enumerate(header) if col]
+        kept_headers = [header[idx] for idx in kept_indices]
+        if not kept_headers:
+            return [], [], url_field
+
+        url_lookup = {name.lower(): name for name in kept_headers}
+        if url_field not in kept_headers:
+            mapped = url_lookup.get(url_field.lower())
+            if mapped:
+                url_field = mapped
+            else:
+                raise ValueError(f"URL field '{url_field}' not found in CSV header")
+
+        rows: List[dict] = []
+        for row in reader:
+            if not row or not any(cell.strip() for cell in row):
+                continue
+            record: dict = {}
+            for idx, name in zip(kept_indices, kept_headers):
+                record[name] = row[idx].strip() if idx < len(row) else ""
+            rows.append(record)
+
+    return rows, kept_headers, url_field
+
+
 def process_batch(
     batch: List[str],
     timeout: float,
@@ -171,42 +213,90 @@ def process_batch(
     completed_offset: int,
     total: int,
 ) -> List[dict]:
+    global _INTERRUPTED
     if workers <= 1 or len(batch) == 1:
         results = []
         for idx, item in enumerate(batch, start=1):
+            if _INTERRUPTED:
+                break
             results.append(process_one(item, timeout=timeout))
             if progress_every > 0 and idx % progress_every == 0:
                 done = completed_offset + idx
                 print(f"progress: {done}/{total}", file=sys.stderr)
+        if _INTERRUPTED:
+            for item in batch[len(results) :]:
+                results.append(
+                    {"url": item, "cdn_url": "", "error_msg": "interrupted"}
+                )
         return results
 
     results: List[Optional[dict]] = [None] * len(batch)
     completed = 0
-    with ThreadPoolExecutor(max_workers=workers) as executor:
+    executor = ThreadPoolExecutor(max_workers=workers)
+    try:
         future_map = {
             executor.submit(process_one, item, timeout): idx
             for idx, item in enumerate(batch)
         }
         for future in as_completed(future_map):
+            if _INTERRUPTED:
+                break
             idx = future_map[future]
             try:
                 results[idx] = future.result()
             except Exception as exc:  # pylint: disable=broad-except
-                results[idx] = {"url": batch[idx], "cdn_url": "", "error_msg": str(exc)}
+                results[idx] = {
+                    "url": batch[idx],
+                    "cdn_url": "",
+                    "error_msg": str(exc),
+                }
             completed += 1
             if progress_every > 0 and completed % progress_every == 0:
                 done = completed_offset + completed
                 print(f"progress: {done}/{total}", file=sys.stderr)
+    except KeyboardInterrupt:
+        _INTERRUPTED = True
+    finally:
+        executor.shutdown(wait=False, cancel_futures=True)
+
+    if _INTERRUPTED:
+        for idx, item in enumerate(results):
+            if item is None:
+                results[idx] = {
+                    "url": batch[idx],
+                    "cdn_url": "",
+                    "error_msg": "interrupted",
+                }
 
     return [item for item in results if item is not None]
 
 
+def build_csv_output_rows(
+    rows: Sequence[dict],
+    headers: Sequence[str],
+    results: Sequence[dict],
+) -> List[dict]:
+    output: List[dict] = []
+    for row, result in zip(rows, results):
+        record = {name: row.get(name, "") for name in headers}
+        record["CDNURL"] = result.get("cdn_url", "")
+        record["error_msg"] = result.get("error_msg", "")
+        output.append(record)
+    return output
+
+
 def main() -> int:
+    signal.signal(signal.SIGINT, _handle_sigint)
     parser = argparse.ArgumentParser(
         description="Resolve Kuaishou share links to CDN URLs and output JSONL."
     )
     parser.add_argument("input", nargs="?", help="Share text or URL")
-    parser.add_argument("--input-file", help="File with one share link per line")
+    parser.add_argument("--input-csv", help="CSV file with URL field and other columns")
+    parser.add_argument(
+        "--csv-url-field",
+        default="URL",
+        help="CSV column name containing the share URL",
+    )
     parser.add_argument("--output", help="Write JSONL to this file (default: stdout)")
     parser.add_argument("--workers", type=int, default=5, help="Concurrent workers")
     parser.add_argument("--timeout", type=float, default=15.0, help="HTTP timeout (s)")
@@ -221,10 +311,48 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    if not args.input and not args.input_file:
-        parser.error("Provide input text/URL or --input-file")
+    if not args.input and not args.input_csv:
+        parser.error("Provide input text/URL or --input-csv")
+    if args.input_csv and args.input:
+        parser.error("Use only one input source: --input-csv or text")
 
-    inputs = load_inputs(args.input, args.input_file)
+    if args.input_csv:
+        try:
+            rows, headers, url_field = load_csv_rows(
+                args.input_csv, args.csv_url_field
+            )
+        except ValueError as exc:
+            parser.error(str(exc))
+        if not rows:
+            parser.error("No usable CSV rows found")
+
+        batch_size = max(1, args.batch_size)
+        total = len(rows)
+        completed = 0
+        first_write = True
+        for start in range(0, total, batch_size):
+            batch_rows = rows[start : start + batch_size]
+            batch_inputs = [row.get(url_field, "") for row in batch_rows]
+            results = process_batch(
+                batch=batch_inputs,
+                timeout=args.timeout,
+                workers=args.workers,
+                progress_every=args.progress_every,
+                completed_offset=completed,
+                total=total,
+            )
+            output_rows = build_csv_output_rows(batch_rows, headers, results)
+            write_jsonl(output_rows, args.output, append=not first_write)
+            first_write = False
+            completed += len(batch_rows)
+            if args.progress_every > 0:
+                print(f"progress: {completed}/{total}", file=sys.stderr)
+            if _INTERRUPTED:
+                print("Interrupted by user, exiting gracefully.", file=sys.stderr)
+                return 130
+        return 0
+
+    inputs = load_inputs(args.input)
     if not inputs:
         parser.error("No usable input lines found")
 
@@ -247,6 +375,9 @@ def main() -> int:
         completed += len(batch)
         if args.progress_every > 0:
             print(f"progress: {completed}/{total}", file=sys.stderr)
+        if _INTERRUPTED:
+            print("Interrupted by user, exiting gracefully.", file=sys.stderr)
+            return 130
     return 0
 
 
