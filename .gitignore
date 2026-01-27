@@ -1,3 +1,6 @@
 dist
 *.txt
 *.pyc
+*.env
+__pycache__/
+.vscode/
