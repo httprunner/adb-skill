@@ -17,7 +17,7 @@ Core identifiers:
 
 Task attributes:
 - `App`, `Scene`, `Params`, `ItemID`, `BookID`, `URL`
-- `UserID`, `UserName`, `GroupID`
+- `UserID`, `UserName`, `GroupID` (auto-filled as `App_BookID_UserID` when `App`/`BookID`/`UserID` are present, with `com.smile.gifmaker` mapped to `快手`)
 - `Status`, `Date`, `Logs`, `LastScreenShot`
 - `DeviceSerial`, `DispatchedDevice`, `DispatchedAt`, `StartAt`, `EndAt`
 - `ElapsedSeconds`, `ItemsCollected`, `RetryCount`, `Extra`
@@ -36,6 +36,15 @@ When ingesting JSON/JSONL rows, each item is treated as a task payload:
 - CLI flags such as `--status` or `--date` act as defaults and override missing fields in each item.
 
 Use `--input <file>`; the script auto-detects JSONL by `.jsonl` suffix or content.
+
+## Skip existing
+
+Use `--skip-existing <fields>` to skip creation when existing records match.
+
+- Single field: `--skip-existing BizTaskID`
+- Multiple fields (all must match): `--skip-existing BookID,UserID`
+
+Supported field names (case-insensitive): `TaskID`, `BizTaskID`, `RecordID`, `BookID`, `UserID`, `App`, `Scene`.
 
 ## Suggested payload format
 

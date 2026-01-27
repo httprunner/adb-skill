@@ -41,7 +41,7 @@ Follow the task table conventions when pulling and updating tasks in Feishu Bita
 - Use `records/batch_create` for multiple tasks, `records` for single create.
 - Accept JSON/JSONL input (same key conventions as update); map `CDNURL` to `Extra`.
 
-## Minimal Python example (standalone)
+## Examples
 
 ```bash
 export FEISHU_APP_ID=...
@@ -58,6 +58,8 @@ python scripts/update_tasks.py \
   --dispatched-at now
 ```
 
+Update single task by BizTaskID:
+
 ```bash
 python scripts/update_tasks.py \
   --biz-task-id ext-20240101-001 \
@@ -65,10 +67,14 @@ python scripts/update_tasks.py \
   --completed-at now
 ```
 
+Update from JSONL output (per-line task updates):
+
 ```bash
 python scripts/update_tasks.py \
   --input output.jsonl
 ```
+
+Update from JSONL with CLI defaults for missing fields:
 
 ```bash
 python scripts/update_tasks.py \
@@ -77,12 +83,38 @@ python scripts/update_tasks.py \
   --date 2026-01-27
 ```
 
+Create tasks from JSONL with defaults:
+
 ```bash
 python scripts/create_tasks.py \
   --input tasks.jsonl \
+  --app com.smile.gifmaker \
+  --scene 单个链接采集 \
   --status pending \
   --date 2026-01-27
 ```
+
+Create from JSONL and skip when BizTaskID already exists:
+
+```bash
+python3 scripts/create_tasks.py \
+  --input tasks.jsonl \
+  --app com.smile.gifmaker \
+  --scene 单个链接采集 \
+  --status ready \
+  --date 2026-01-27 \
+  --skip-existing BizTaskID
+```
+
+Create from JSONL and skip when both BookID and UserID match existing records:
+
+```bash
+python scripts/create_tasks.py \
+  --input tasks.jsonl \
+  --skip-existing BookID,UserID
+```
+
+Create a single task with explicit fields:
 
 ```bash
 python scripts/create_tasks.py \

@@ -17,6 +17,8 @@ APP_GROUP_LABELS = {
     "com.smile.gifmaker": "快手",
 }
 
+MAX_FILTER_VALUES = 50
+
 
 def build_create_fields(fields_map: Dict[str, str], item: Dict[str, Any]) -> Dict[str, Any]:
     fields: Dict[str, Any] = {}
@@ -151,6 +153,148 @@ def create_record(base_url: str, token: str, ref: common.BitableRef, fields: Dic
         )
 
 
+def chunked(values: List[str], size: int) -> List[List[str]]:
+    if size <= 0:
+        return [values]
+    return [values[i : i + size] for i in range(0, len(values), size)]
+
+
+def build_id_filter(field_name: str, values: List[str]) -> Optional[dict]:
+    field_name = (field_name or "").strip()
+    if not field_name:
+        return None
+    seen = set()
+    conditions = []
+    for value in values:
+        value = (value or "").strip()
+        if not value or value in seen:
+            continue
+        seen.add(value)
+        conditions.append({"field_name": field_name, "operator": "is", "value": [value]})
+    if not conditions:
+        return None
+    return {"conjunction": "or", "conditions": conditions}
+
+
+def fetch_records(
+    base_url: str,
+    token: str,
+    ref: common.BitableRef,
+    filter_obj: Optional[dict],
+    page_size: int,
+) -> List[dict]:
+    page_size = common.clamp_page_size(page_size)
+    url = (
+        f"{base_url}/open-apis/bitable/v1/apps/{ref.app_token}"
+        f"/tables/{ref.table_id}/records/search?page_size={page_size}"
+    )
+    body = {"filter": filter_obj} if filter_obj else None
+    resp = common.request_json("POST", url, token, body)
+    if resp.get("code") != 0:
+        raise RuntimeError(f"search records failed: code={resp.get('code')} msg={resp.get('msg')}")
+    data = resp.get("data") or {}
+    return data.get("items") or []
+
+
+def resolve_existing_by_field(
+    base_url: str,
+    token: str,
+    ref: common.BitableRef,
+    field_name: str,
+    values: List[str],
+) -> Dict[str, str]:
+    existing: Dict[str, str] = {}
+    if not values:
+        return existing
+    for batch in chunked(values, MAX_FILTER_VALUES):
+        filter_obj = build_id_filter(field_name, batch)
+        if not filter_obj:
+            continue
+        items = fetch_records(
+            base_url=base_url,
+            token=token,
+            ref=ref,
+            filter_obj=filter_obj,
+            page_size=min(common.MAX_PAGE_SIZE, max(len(batch), 1)),
+        )
+        for item in items:
+            record_id = (item.get("record_id") or "").strip()
+            raw_fields = item.get("fields") or {}
+            value = common.bitable_value_to_string(raw_fields.get(field_name, ""))
+            if record_id and value and value not in existing:
+                existing[value] = record_id
+    return existing
+
+
+def record_exists(base_url: str, token: str, ref: common.BitableRef, record_id: str) -> bool:
+    record_id = (record_id or "").strip()
+    if not record_id:
+        return False
+    url = (
+        f"{base_url}/open-apis/bitable/v1/apps/{ref.app_token}"
+        f"/tables/{ref.table_id}/records/{record_id}"
+    )
+    try:
+        resp = common.request_json("GET", url, token, None)
+    except Exception:
+        return False
+    return resp.get("code") == 0
+
+
+def normalize_skip_fields(raw: str) -> List[str]:
+    if not raw:
+        return []
+    parts = [part.strip() for part in raw.split(",") if part.strip()]
+    resolved: List[str] = []
+    aliases = {
+        "task_id": "TaskID",
+        "taskid": "TaskID",
+        "biz_task_id": "BizTaskID",
+        "biztaskid": "BizTaskID",
+        "record_id": "RecordID",
+        "recordid": "RecordID",
+        "book_id": "BookID",
+        "bookid": "BookID",
+        "user_id": "UserID",
+        "userid": "UserID",
+        "app": "App",
+        "scene": "Scene",
+    }
+    for part in parts:
+        key = part
+        if part.lower() in aliases:
+            key = aliases[part.lower()]
+        if key:
+            resolved.append(key)
+    seen = set()
+    uniq = []
+    for name in resolved:
+        if name not in seen:
+            seen.add(name)
+            uniq.append(name)
+    return uniq
+
+
+def extract_item_value(item: Dict[str, Any], field_name: str) -> str:
+    if field_name == "TaskID":
+        task_id = common.coerce_int(item.get("task_id"))
+        return str(task_id) if task_id else ""
+    if field_name == "BizTaskID":
+        return (item.get("biz_task_id") or "").strip()
+    if field_name == "RecordID":
+        return (item.get("record_id") or "").strip()
+    if field_name == "BookID":
+        return (item.get("book_id") or "").strip()
+    if field_name == "UserID":
+        return (item.get("user_id") or "").strip()
+    if field_name == "App":
+        return (item.get("app") or "").strip()
+    if field_name == "Scene":
+        return (item.get("scene") or "").strip()
+    raw = item.get(field_name)
+    return common.bitable_value_to_string(raw)
+
+
 def parse_args(argv: List[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Create tasks in Feishu Bitable (HTTP).")
     parser.add_argument("--task-url", default=common.env("TASK_BITABLE_URL"), help="Bitable task table URL")
@@ -180,6 +324,11 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
     parser.add_argument("--last-screenshot", default="", help="Last screenshot reference")
     parser.add_argument("--group-id", default="", help="Group id")
     parser.add_argument("--extra", default="", help="Extra JSON string")
+    parser.add_argument(
+        "--skip-existing",
+        default="",
+        help="Skip create when existing records match these fields (comma-separated, all must match)",
+    )
     return parser.parse_args(argv)
 
 
@@ -231,6 +380,9 @@ def load_creates(args: argparse.Namespace, fields_map: Dict[str, str]) -> List[d
         "biz_task_id",
         "bizTaskId",
         "BizTaskID",
+        "record_id",
+        "recordId",
+        "RecordID",
         "parent_task_id",
         "parentTaskId",
         "ParentTaskID",
@@ -327,7 +479,9 @@ def load_creates(args: argparse.Namespace, fields_map: Dict[str, str]) -> List[d
                     extra_fields[key] = value
 
         merged = {
+            "task_id": item.get("task_id") or item.get("taskID") or item.get("TaskID"),
             "biz_task_id": item.get("biz_task_id") or item.get("bizTaskId") or item.get("BizTaskID"),
+            "record_id": item.get("record_id") or item.get("recordId") or item.get("RecordID"),
             "parent_task_id": item.get("parent_task_id") or item.get("parentTaskId") or item.get("ParentTaskID"),
             "app": pick(item, "app", args.app) or item.get("App"),
             "scene": pick(item, "scene", args.scene) or item.get("Scene"),
@@ -395,12 +549,54 @@ def main(argv: List[str]) -> int:
 
     records: List[dict] = []
     errors: List[str] = []
+    skipped = 0
+
+    skip_fields = normalize_skip_fields(args.skip_existing)
+    existing_by_field: Dict[str, Dict[str, str]] = {}
+    existing_record_ids: set[str] = set()
+    if skip_fields:
+        field_map = {key: fields_map.get(key, key) for key in skip_fields if key != "RecordID"}
+        for item in creates:
+            for field_name in skip_fields:
+                if field_name == "RecordID":
+                    record_id = (item.get("record_id") or "").strip()
+                    if record_id and record_id not in existing_record_ids:
+                        if record_exists(base_url, token, ref, record_id):
+                            existing_record_ids.add(record_id)
+                    continue
+                value = extract_item_value(item, field_name)
+                if not value:
+                    continue
+                existing_by_field.setdefault(field_name, {})[value] = ""
+        for field_name, values_map in list(existing_by_field.items()):
+            mapped_field = field_map.get(field_name, field_name)
+            values = list(values_map.keys())
+            existing_by_field[field_name] = resolve_existing_by_field(
+                base_url=base_url,
+                token=token,
+                ref=ref,
+                field_name=mapped_field,
+                values=values,
+            )
     for item in creates:
-        try:
-            fields = build_create_fields(fields_map, item)
-        except ValueError as exc:
-            errors.append(str(exc))
-            continue
+        if skip_fields:
+            all_match = True
+            for field_name in skip_fields:
+                if field_name == "RecordID":
+                    record_id = (item.get("record_id") or "").strip()
+                    if not record_id or record_id not in existing_record_ids:
+                        all_match = False
+                        break
+                    continue
+                value = extract_item_value(item, field_name)
+                if not value or value not in existing_by_field.get(field_name, {}):
+                    all_match = False
+                    break
+            if all_match:
+                skipped += 1
+                continue
+
+        fields = build_create_fields(fields_map, item)
         if not fields:
             errors.append("task: no fields to create")
             continue
@@ -424,6 +620,7 @@ def main(argv: List[str]) -> int:
     payload = {
         "created": created,
         "requested": len(records),
+        "skipped": skipped,
         "failed": len(errors),
         "errors": errors,
         "elapsed_seconds": round(duration, 3),
