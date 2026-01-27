@@ -7,9 +7,11 @@ import json
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Dict, List, Tuple
+import signal
+from typing import Dict, List, Set, Tuple
 
-from ks_extract import extract_cdn_url_detail
+from kwai_extract_cdn import extract_cdn_url_detail
+from kwai_common import clean_output_jsonl, load_resume_success_urls
 
 
 def _write_jsonl_row(row: Dict[str, str], output) -> None:
@@ -48,7 +50,11 @@ def main() -> int:
         help="Optional output column for error message (e.g., error_msg). Leave empty to disable.",
     )
     parser.add_argument("--cookie", default=None, help="Raw Cookie header value")
-    parser.add_argument("--cookie-file", default=None, help="Path to a cookie.txt file")
+    parser.add_argument(
+        "--cookie-file",
+        default=None,
+        help="Path to a cookie.txt file or JSON cookie array",
+    )
     parser.add_argument(
         "--endpoint",
         action="append",
@@ -57,7 +63,7 @@ def main() -> int:
     )
     parser.add_argument("--sleep", type=float, default=0.0, help="Sleep between requests (seconds)")
     parser.add_argument("--workers", type=int, default=1, help="Concurrent workers")
-    parser.add_argument("--progress-every", type=int, default=50, help="Progress log interval")
+    parser.add_argument("--progress-every", type=int, default=10, help="Progress log interval")
     parser.add_argument(
         "--jitter",
         default="0,0",
@@ -68,20 +74,30 @@ def main() -> int:
     parser.add_argument(
         "--resume",
         action="store_true",
-        help="Resume by skipping lines already present in output file (JSONL only)",
+        help="Skip URLs already resolved in output JSONL (CDNURL set, error empty)",
     )
     args = parser.parse_args()
 
-    resume_offset = 0
     output_mode = "w"
-    if args.output != "-" and args.resume:
-        try:
-            with open(args.output, "r", encoding="utf-8") as existing:
-                resume_offset = sum(1 for _ in existing)
-            output_mode = "a"
-        except FileNotFoundError:
-            resume_offset = 0
-            output_mode = "w"
+    resume_urls: Set[str] = set()
+    if args.resume:
+        if args.output == "-":
+            sys.stderr.write("--resume requires --output file\n")
+            return 2
+        kept, removed = clean_output_jsonl(
+            args.output,
+            cdn_field=args.cdn_col,
+            error_field=args.error_col or None,
+        )
+        if removed:
+            sys.stderr.write(f"resume: removed {removed} failed rows\n")
+        resume_urls = load_resume_success_urls(
+            args.output,
+            args.url_col,
+            cdn_field=args.cdn_col,
+            error_field=args.error_col or None,
+        )
+        output_mode = "a"
 
     output = sys.stdout if args.output == "-" else open(args.output, output_mode, encoding="utf-8")
     jitter_vals = (0.0, 0.0)
@@ -101,35 +117,52 @@ def main() -> int:
             return 2
 
         rows = list(reader)
-        if resume_offset:
-            rows = rows[resume_offset:]
         total = len(rows)
-        completed = 0
+        skipped = 0
+        if resume_urls:
+            rows = [
+                row
+                for row in rows
+                if row.get(args.url_col, "").strip() not in resume_urls
+            ]
+            skipped = total - len(rows)
+            if skipped:
+                sys.stderr.write(f"resume: skipped {skipped} already resolved\n")
+        if not rows:
+            sys.stderr.write("resume: all rows already resolved\n")
+            return 0
+        total_remaining = len(rows)
+        completed = skipped
 
         if args.workers <= 1:
-            for row in rows:
-                share_url = row.get(args.url_col, "")
-                cdn_url, err = _process_one(
-                    share_url,
-                    cookie=args.cookie,
-                    cookie_file=args.cookie_file,
-                    endpoints=args.endpoint or [],
-                    timeout=args.timeout,
-                    jitter=jitter_vals,
-                )
-                row[args.cdn_col] = cdn_url or ""
-                if args.error_col:
-                    row[args.error_col] = err
-                _write_jsonl_row(row, output)
-                completed += 1
-                if args.progress_every and completed % args.progress_every == 0:
-                    sys.stderr.write(
-                        f"progress: {resume_offset + completed}/{resume_offset + total}\n"
+            try:
+                for row in rows:
+                    share_url = row.get(args.url_col, "")
+                    cdn_url, err = _process_one(
+                        share_url,
+                        cookie=args.cookie,
+                        cookie_file=args.cookie_file,
+                        endpoints=args.endpoint or [],
+                        timeout=args.timeout,
+                        jitter=jitter_vals,
                     )
-                if args.sleep:
-                    time.sleep(args.sleep)
+                    row[args.cdn_col] = cdn_url or ""
+                    if args.error_col:
+                        row[args.error_col] = err
+                    _write_jsonl_row(row, output)
+                    completed += 1
+                    if args.progress_every and completed % args.progress_every == 0:
+                        sys.stderr.write(
+                            f"progress: {completed}/{total}\n"
+                        )
+                    if args.sleep:
+                        time.sleep(args.sleep)
+            except KeyboardInterrupt:
+                sys.stderr.write("Interrupted by user, exiting gracefully.\n")
+                return 130
         else:
-            with ThreadPoolExecutor(max_workers=args.workers) as executor:
+            executor = ThreadPoolExecutor(max_workers=args.workers)
+            try:
                 future_map = {}
                 for idx, row in enumerate(rows):
                     share_url = row.get(args.url_col, "")
@@ -144,7 +177,7 @@ def main() -> int:
                     )
                     future_map[future] = idx
 
-                results: List[Tuple[str, str]] = [("", "")] * total
+                results: List[Tuple[str, str]] = [("", "")] * total_remaining
                 ready: Dict[int, Tuple[str, str]] = {}
                 next_idx = 0
                 for future in as_completed(future_map):
@@ -157,7 +190,7 @@ def main() -> int:
                     completed += 1
                     if args.progress_every and completed % args.progress_every == 0:
                         sys.stderr.write(
-                            f"progress: {resume_offset + completed}/{resume_offset + total}\n"
+                            f"progress: {completed}/{total}\n"
                         )
 
                     while next_idx in ready:
@@ -168,6 +201,13 @@ def main() -> int:
                             row[args.error_col] = err
                         _write_jsonl_row(row, output)
                         next_idx += 1
+            except KeyboardInterrupt:
+                sys.stderr.write("Interrupted by user, exiting gracefully.\n")
+                signal.signal(signal.SIGINT, signal.SIG_IGN)
+                executor.shutdown(wait=False, cancel_futures=True)
+                return 130
+            finally:
+                executor.shutdown(wait=False, cancel_futures=True)
 
     if output is not sys.stdout:
         output.close()

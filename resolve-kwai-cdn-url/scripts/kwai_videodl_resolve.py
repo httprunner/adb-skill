@@ -18,6 +18,7 @@ from typing import Iterable, List, Optional, Sequence, Tuple
 import requests
 from videodl import videodl as videodl_lib
 
+from kwai_common import clean_output_jsonl, load_resume_success_urls
 
 UA_MOBILE = (
     "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) "
@@ -298,6 +299,11 @@ def main() -> int:
         help="CSV column name containing the share URL",
     )
     parser.add_argument("--output", help="Write JSONL to this file (default: stdout)")
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="Skip URLs already resolved in output JSONL (CSV mode only)",
+    )
     parser.add_argument("--workers", type=int, default=5, help="Concurrent workers")
     parser.add_argument("--timeout", type=float, default=15.0, help="HTTP timeout (s)")
     parser.add_argument(
@@ -315,8 +321,12 @@ def main() -> int:
         parser.error("Provide input text/URL or --input-csv")
     if args.input_csv and args.input:
         parser.error("Use only one input source: --input-csv or text")
+    if args.resume and not args.input_csv:
+        parser.error("--resume is only supported with --input-csv")
 
     if args.input_csv:
+        if args.resume and (not args.output or args.output == "-"):
+            parser.error("--resume requires --output file")
         try:
             rows, headers, url_field = load_csv_rows(
                 args.input_csv, args.csv_url_field
@@ -326,11 +336,43 @@ def main() -> int:
         if not rows:
             parser.error("No usable CSV rows found")
 
-        batch_size = max(1, args.batch_size)
+        skipped = 0
         total = len(rows)
-        completed = 0
-        first_write = True
-        for start in range(0, total, batch_size):
+        if args.resume:
+            kept, removed = clean_output_jsonl(
+                args.output,
+                cdn_field="CDNURL",
+                error_field="error_msg",
+            )
+            if removed:
+                print(f"resume: removed {removed} failed rows", file=sys.stderr)
+            resume_urls = load_resume_success_urls(
+                args.output,
+                url_field,
+                cdn_field="CDNURL",
+                error_field="error_msg",
+            )
+            if resume_urls:
+                rows = [
+                    row
+                    for row in rows
+                    if row.get(url_field, "").strip() not in resume_urls
+                ]
+                skipped = total - len(rows)
+                if skipped:
+                    print(
+                        f"resume: skipped {skipped} already resolved",
+                        file=sys.stderr,
+                    )
+            if not rows:
+                print("resume: all rows already resolved", file=sys.stderr)
+                return 0
+
+        total_remaining = len(rows)
+        batch_size = max(1, args.batch_size)
+        completed = skipped
+        first_write = not args.resume
+        for start in range(0, total_remaining, batch_size):
             batch_rows = rows[start : start + batch_size]
             batch_inputs = [row.get(url_field, "") for row in batch_rows]
             results = process_batch(

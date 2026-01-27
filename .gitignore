@@ -4,3 +4,6 @@ dist
 *.env
 __pycache__/
 .vscode/
+*.csv
+*.jsonl
+*.json

@@ -270,9 +270,28 @@ def extract_cdn_url_detail(
 
     if cookie_file:
         try:
-            cookie = open(cookie_file, "r", encoding="utf-8").read().strip()
+            cookie_text = open(cookie_file, "r", encoding="utf-8").read().strip()
         except Exception:
-            cookie = cookie or None
+            cookie_text = ""
+        if cookie_text:
+            try:
+                data = json.loads(cookie_text)
+            except Exception:
+                data = None
+            if isinstance(data, dict) and "cookies" in data:
+                data = data["cookies"]
+            if isinstance(data, list):
+                pairs = []
+                for item in data:
+                    if not isinstance(item, dict):
+                        continue
+                    name = item.get("name")
+                    value = item.get("value")
+                    if isinstance(name, str) and isinstance(value, str) and name:
+                        pairs.append(f"{name}={value}")
+                cookie = "; ".join(pairs) if pairs else None
+            else:
+                cookie = cookie_text
     if cookie:
         session.headers["Cookie"] = cookie
 
@@ -344,7 +363,11 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Extract Kuaishou CDN URL from a share link")
     parser.add_argument("url", help="Kuaishou share URL")
     parser.add_argument("--cookie", default=None, help="Raw Cookie header value")
-    parser.add_argument("--cookie-file", default=None, help="Path to a cookie.txt file")
+    parser.add_argument(
+        "--cookie-file",
+        default=None,
+        help="Path to a cookie.txt file or JSON cookie array",
+    )
     parser.add_argument(
         "--endpoint",
         action="append",
