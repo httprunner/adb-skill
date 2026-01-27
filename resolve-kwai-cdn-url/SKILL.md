@@ -17,6 +17,7 @@ uv sync
 uv run python scripts/kwai_videodl_resolve.py "https://v.kuaishou.com/8qIlZu" > single.jsonl
 uv run python scripts/kwai_videodl_resolve.py --input-csv data.csv --csv-url-field URL --output output.jsonl --workers 10
 uv run python scripts/kwai_videodl_resolve.py --input-csv data.csv --csv-url-field URL --output output.jsonl --workers 10 --resume
+uv run python scripts/kwai_videodl_resolve.py "https://v.kuaishou.com/8qIlZu" --proxy "http://user:pass@host:port"
 ```
 
 ## Fallback path (GraphQL/mobile-page)
@@ -24,9 +25,11 @@ uv run python scripts/kwai_videodl_resolve.py --input-csv data.csv --csv-url-fie
 ```bash
 uv run python scripts/kwai_extract_cdn.py "https://www.kuaishou.com/short-video/3xu6tezif2v55m2" --cookie "<YOUR_COOKIE>"
 uv run python scripts/kwai_extract_cdn.py "https://www.kuaishou.com/short-video/3xu6tezif2v55m2" --cookie-file cookie.json
+uv run python scripts/kwai_extract_cdn.py "https://www.kuaishou.com/short-video/3xu6tezif2v55m2" --proxy "http://user:pass@host:port"
 uv run python scripts/kwai_csv_to_jsonl.py data.csv --url-col URL --cdn-col CDNURL --cookie "<YOUR_COOKIE>" --workers 10 --output output.jsonl
 uv run python scripts/kwai_csv_to_jsonl.py data.csv --url-col URL --cdn-col CDNURL --cookie-file cookie.json --workers 10 --output output.jsonl
 uv run python scripts/kwai_csv_to_jsonl.py data.csv --url-col URL --cdn-col CDNURL --cookie "<YOUR_COOKIE>" --workers 10 --output output.jsonl --resume
+uv run python scripts/kwai_csv_to_jsonl.py data.csv --url-col URL --cdn-col CDNURL --proxy "http://user:pass@host:port" --workers 10 --output output.jsonl
 ```
 
 ## Output
@@ -41,6 +44,7 @@ uv run python scripts/kwai_csv_to_jsonl.py data.csv --url-col URL --cdn-col CDNU
 - If blocked, pass a real browser cookie via `--cookie` or `--cookie-file`.
 - `--cookie` expects a raw Cookie header string, e.g. `kpf=PC_WEB; clientid=3; did=...`.
 - `--cookie-file` accepts either a raw Cookie header string or a JSON cookie array export (list of `{name,value}` objects).
+- `--proxy` applies to all HTTP requests, e.g. `http://user:pass@host:port`.
 - `--resume` rewrites output JSONL to keep only successful rows, then retries missing/failed rows and appends new results.
 
 ## Resources

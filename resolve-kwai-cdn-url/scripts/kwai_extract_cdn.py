@@ -258,6 +258,7 @@ def extract_cdn_url_detail(
     share_url: str,
     cookie: Optional[str] = None,
     cookie_file: Optional[str] = None,
+    proxy: Optional[str] = None,
     endpoints: Optional[List[str]] = None,
     timeout: int = 10,
     jitter: Tuple[float, float] = (0.0, 0.0),
@@ -294,6 +295,11 @@ def extract_cdn_url_detail(
                 cookie = cookie_text
     if cookie:
         session.headers["Cookie"] = cookie
+    if proxy:
+        session.proxies.update({
+            "http": proxy,
+            "https": proxy,
+        })
 
     raw_url = extract_first_url(share_url) or share_url
     if jitter and (jitter[0] or jitter[1]):
@@ -346,6 +352,7 @@ def extract_cdn_url(
     share_url: str,
     cookie: Optional[str] = None,
     cookie_file: Optional[str] = None,
+    proxy: Optional[str] = None,
     endpoints: Optional[List[str]] = None,
     timeout: int = 10,
 ) -> Optional[str]:
@@ -353,6 +360,7 @@ def extract_cdn_url(
         share_url,
         cookie=cookie,
         cookie_file=cookie_file,
+        proxy=proxy,
         endpoints=endpoints,
         timeout=timeout,
     )
@@ -367,6 +375,11 @@ def main() -> int:
         "--cookie-file",
         default=None,
         help="Path to a cookie.txt file or JSON cookie array",
+    )
+    parser.add_argument(
+        "--proxy",
+        default=None,
+        help="Proxy URL, e.g. http://user:pass@host:port",
     )
     parser.add_argument(
         "--endpoint",
@@ -394,6 +407,7 @@ def main() -> int:
         args.url,
         cookie=args.cookie,
         cookie_file=args.cookie_file,
+        proxy=args.proxy,
         endpoints=args.endpoint,
         timeout=args.timeout,
         jitter=jitter_vals,

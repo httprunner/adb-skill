@@ -23,6 +23,7 @@ def _process_one(
     share_url: str,
     cookie: str,
     cookie_file: str,
+    proxy: str,
     endpoints: List[str],
     timeout: int,
     jitter: Tuple[float, float],
@@ -33,6 +34,7 @@ def _process_one(
         share_url,
         cookie=cookie,
         cookie_file=cookie_file,
+        proxy=proxy,
         endpoints=endpoints or None,
         timeout=timeout,
         jitter=jitter,
@@ -54,6 +56,11 @@ def main() -> int:
         "--cookie-file",
         default=None,
         help="Path to a cookie.txt file or JSON cookie array",
+    )
+    parser.add_argument(
+        "--proxy",
+        default=None,
+        help="Proxy URL, e.g. http://user:pass@host:port",
     )
     parser.add_argument(
         "--endpoint",
@@ -142,6 +149,7 @@ def main() -> int:
                         share_url,
                         cookie=args.cookie,
                         cookie_file=args.cookie_file,
+                        proxy=args.proxy,
                         endpoints=args.endpoint or [],
                         timeout=args.timeout,
                         jitter=jitter_vals,
@@ -171,6 +179,7 @@ def main() -> int:
                         share_url,
                         args.cookie,
                         args.cookie_file,
+                        args.proxy,
                         args.endpoint or [],
                         args.timeout,
                         jitter_vals,

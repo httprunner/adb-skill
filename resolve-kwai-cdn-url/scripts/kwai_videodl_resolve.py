@@ -43,28 +43,34 @@ def extract_first_url(text: str) -> Optional[str]:
     return url.strip(" \t\r\n\"'<>[](){}，。；;:!?")
 
 
-def resolve_short_url(url: str, timeout: float) -> str:
+def resolve_short_url(url: str, timeout: float, proxy: Optional[str]) -> str:
     if "v.kuaishou.com" not in url:
         return url
     try:
+        proxies = {"http": proxy, "https": proxy} if proxy else None
         resp = requests.get(
             url,
             allow_redirects=True,
             timeout=timeout,
             headers={"User-Agent": UA_MOBILE},
+            proxies=proxies,
         )
         return resp.url or url
     except requests.RequestException:
         return url
 
 
-def detect_unavailable_reason(url: str, timeout: float) -> Optional[str]:
+def detect_unavailable_reason(
+    url: str, timeout: float, proxy: Optional[str]
+) -> Optional[str]:
     try:
+        proxies = {"http": proxy, "https": proxy} if proxy else None
         resp = requests.get(
             url,
             allow_redirects=True,
             timeout=timeout,
             headers={"User-Agent": UA_MOBILE},
+            proxies=proxies,
         )
     except requests.RequestException as exc:
         return f"http error: {exc}"
@@ -120,7 +126,7 @@ def resolve_cdn_url(url: str) -> str:
     return ""
 
 
-def process_one(text: str, timeout: float) -> dict:
+def process_one(text: str, timeout: float, proxy: Optional[str]) -> dict:
     raw = text.strip()
     result = {"url": "", "cdn_url": "", "error_msg": ""}
     if not raw:
@@ -133,11 +139,13 @@ def process_one(text: str, timeout: float) -> dict:
         result["error_msg"] = "no http/https url found"
         return result
 
-    resolved = resolve_short_url(url, timeout=timeout)
+    resolved = resolve_short_url(url, timeout=timeout, proxy=proxy)
     try:
         cdn_url = resolve_cdn_url(resolved)
         if not cdn_url:
-            reason = detect_unavailable_reason(resolved, timeout=timeout)
+            reason = detect_unavailable_reason(
+                resolved, timeout=timeout, proxy=proxy
+            )
             result["error_msg"] = reason or "cdn url not found in videodl response"
         else:
             result["cdn_url"] = cdn_url
@@ -209,6 +217,7 @@ def load_csv_rows(
 def process_batch(
     batch: List[str],
     timeout: float,
+    proxy: Optional[str],
     workers: int,
     progress_every: int,
     completed_offset: int,
@@ -220,7 +229,7 @@ def process_batch(
         for idx, item in enumerate(batch, start=1):
             if _INTERRUPTED:
                 break
-            results.append(process_one(item, timeout=timeout))
+            results.append(process_one(item, timeout=timeout, proxy=proxy))
             if progress_every > 0 and idx % progress_every == 0:
                 done = completed_offset + idx
                 print(f"progress: {done}/{total}", file=sys.stderr)
@@ -236,7 +245,7 @@ def process_batch(
     executor = ThreadPoolExecutor(max_workers=workers)
     try:
         future_map = {
-            executor.submit(process_one, item, timeout): idx
+            executor.submit(process_one, item, timeout, proxy): idx
             for idx, item in enumerate(batch)
         }
         for future in as_completed(future_map):
@@ -303,6 +312,11 @@ def main() -> int:
         "--resume",
         action="store_true",
         help="Skip URLs already resolved in output JSONL (CSV mode only)",
+    )
+    parser.add_argument(
+        "--proxy",
+        default=None,
+        help="Proxy URL, e.g. http://user:pass@host:port",
     )
     parser.add_argument("--workers", type=int, default=5, help="Concurrent workers")
     parser.add_argument("--timeout", type=float, default=15.0, help="HTTP timeout (s)")
@@ -378,6 +392,7 @@ def main() -> int:
             results = process_batch(
                 batch=batch_inputs,
                 timeout=args.timeout,
+                proxy=args.proxy,
                 workers=args.workers,
                 progress_every=args.progress_every,
                 completed_offset=completed,
@@ -407,6 +422,7 @@ def main() -> int:
         results = process_batch(
             batch=batch,
             timeout=args.timeout,
+            proxy=args.proxy,
             workers=args.workers,
             progress_every=args.progress_every,
             completed_offset=completed,
