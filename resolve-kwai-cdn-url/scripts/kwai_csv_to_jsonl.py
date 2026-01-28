@@ -3,15 +3,23 @@
 
 import argparse
 import csv
+import hashlib
 import json
+import signal
 import sys
 import time
+from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
-import signal
 from typing import Dict, List, Set, Tuple
 
 from kwai_extract_cdn import extract_cdn_url_detail
 from kwai_common import clean_output_jsonl, load_resume_success_urls
+
+CLIENT_IDENTIFIERS = (
+    "chrome_120",
+    "firefox_120",
+    "safari_16_0",
+)
 
 
 def _write_jsonl_row(row: Dict[str, str], output) -> None:
@@ -30,8 +38,10 @@ def _process_one(
 ) -> Tuple[str, str]:
     if not share_url:
         return "", "empty url"
+    client_identifier = _select_client_identifier(share_url)
     return extract_cdn_url_detail(
         share_url,
+        client_identifier=client_identifier,
         cookie=cookie,
         cookie_file=cookie_file,
         proxy=proxy,
@@ -39,6 +49,14 @@ def _process_one(
         timeout=timeout,
         jitter=jitter,
     )
+
+
+def _select_client_identifier(share_url: str) -> str:
+    if not CLIENT_IDENTIFIERS:
+        return "chrome_120"
+    digest = hashlib.md5(share_url.encode("utf-8")).digest()
+    idx = int.from_bytes(digest[:2], "big") % len(CLIENT_IDENTIFIERS)
+    return CLIENT_IDENTIFIERS[idx]
 
 
 def _normalize_cdn_url(cdn_url: str, err: str) -> Tuple[str, str]:
@@ -52,8 +70,46 @@ def _normalize_cdn_url(cdn_url: str, err: str) -> Tuple[str, str]:
         "http://captcha.zt.kuaishou.com"
     ):
         reason = f"captcha url is not a CDN url: {cdn_url}"
-        return "", err or reason
+        if err and err != reason:
+            return "", f"{err}; {reason}"
+        return "", reason
     return cdn_url, err
+
+
+def _bucket_failure(err: str) -> str:
+    if not err:
+        return "unknown"
+    lower = err.lower()
+    if "captcha url is not a cdn url" in lower:
+        return "captcha_url"
+    if "live.kuaishou.com is not a cdn url" in lower:
+        return "live_url"
+    if "photoid not found" in lower:
+        return "photo_id_missing"
+    if "cdn url not found" in lower:
+        return "cdn_not_found"
+    if "empty url" in lower:
+        return "empty_url"
+    return "other"
+
+
+def _emit_stats(
+    processed: int,
+    success_total: int,
+    failure_total: int,
+    skipped: int,
+    failure_buckets: Counter[str],
+) -> None:
+    if processed <= 0:
+        return
+    bucket_parts = ", ".join(
+        f"{key}={value}" for key, value in failure_buckets.items()
+    )
+    sys.stderr.write(
+        "stats: processed="
+        f"{processed} success={success_total} failed={failure_total}"
+        f" skipped={skipped} buckets={{ {bucket_parts} }}\n"
+    )
 
 
 def main() -> int:
@@ -155,10 +211,14 @@ def main() -> int:
             return 0
         total_remaining = len(rows)
         completed = skipped
+        processed = 0
+        success_total = 0
+        failure_total = 0
         success_batch = 0
+        failure_buckets: Counter[str] = Counter()
 
-        if args.workers <= 1:
-            try:
+        try:
+            if args.workers <= 1:
                 for row in rows:
                     share_url = row.get(args.url_col, "")
                     cdn_url, err = _process_one(
@@ -176,8 +236,13 @@ def main() -> int:
                         row[args.error_col] = err
                     _write_jsonl_row(row, output)
                     completed += 1
+                    processed += 1
                     if cdn_url:
                         success_batch += 1
+                        success_total += 1
+                    else:
+                        failure_total += 1
+                        failure_buckets[_bucket_failure(err)] += 1
                     if args.progress_every and completed % args.progress_every == 0:
                         sys.stderr.write(
                             f"progress: {completed}/{total} success: {success_batch}\n"
@@ -185,61 +250,66 @@ def main() -> int:
                         success_batch = 0
                     if args.sleep:
                         time.sleep(args.sleep)
-            except KeyboardInterrupt:
-                sys.stderr.write("Interrupted by user, exiting gracefully.\n")
-                return 130
-        else:
-            executor = ThreadPoolExecutor(max_workers=args.workers)
-            try:
-                future_map = {}
-                for idx, row in enumerate(rows):
-                    share_url = row.get(args.url_col, "")
-                    future = executor.submit(
-                        _process_one,
-                        share_url,
-                        args.cookie,
-                        args.cookie_file,
-                        args.proxy,
-                        args.endpoint or [],
-                        args.timeout,
-                        jitter_vals,
-                    )
-                    future_map[future] = idx
-
-                results: List[Tuple[str, str]] = [("", "")] * total_remaining
-                ready: Dict[int, Tuple[str, str]] = {}
-                next_idx = 0
-                for future in as_completed(future_map):
-                    idx = future_map[future]
-                    try:
-                        results[idx] = _normalize_cdn_url(*future.result())
-                    except Exception as exc:
-                        results[idx] = ("", str(exc))
-                    ready[idx] = results[idx]
-                    completed += 1
-                    if results[idx][0]:
-                        success_batch += 1
-                    if args.progress_every and completed % args.progress_every == 0:
-                        sys.stderr.write(
-                            f"progress: {completed}/{total} success: {success_batch}\n"
+            else:
+                executor = ThreadPoolExecutor(max_workers=args.workers)
+                try:
+                    future_map = {}
+                    for idx, row in enumerate(rows):
+                        share_url = row.get(args.url_col, "")
+                        future = executor.submit(
+                            _process_one,
+                            share_url,
+                            args.cookie,
+                            args.cookie_file,
+                            args.proxy,
+                            args.endpoint or [],
+                            args.timeout,
+                            jitter_vals,
                         )
-                        success_batch = 0
+                        future_map[future] = idx
 
-                    while next_idx in ready:
-                        cdn_url, err = ready.pop(next_idx)
-                        row = rows[next_idx]
-                        row[args.cdn_col] = cdn_url or ""
-                        if args.error_col:
-                            row[args.error_col] = err
-                        _write_jsonl_row(row, output)
-                        next_idx += 1
-            except KeyboardInterrupt:
-                sys.stderr.write("Interrupted by user, exiting gracefully.\n")
+                    results: List[Tuple[str, str]] = [("", "")] * total_remaining
+                    ready: Dict[int, Tuple[str, str]] = {}
+                    next_idx = 0
+                    for future in as_completed(future_map):
+                        idx = future_map[future]
+                        try:
+                            results[idx] = _normalize_cdn_url(*future.result())
+                        except Exception as exc:
+                            results[idx] = ("", str(exc))
+                        ready[idx] = results[idx]
+                        completed += 1
+                        if results[idx][0]:
+                            success_batch += 1
+                        if args.progress_every and completed % args.progress_every == 0:
+                            sys.stderr.write(
+                                f"progress: {completed}/{total} success: {success_batch}\n"
+                            )
+                            success_batch = 0
+
+                        while next_idx in ready:
+                            cdn_url, err = ready.pop(next_idx)
+                            row = rows[next_idx]
+                            row[args.cdn_col] = cdn_url or ""
+                            if args.error_col:
+                                row[args.error_col] = err
+                            _write_jsonl_row(row, output)
+                            processed += 1
+                            if cdn_url:
+                                success_total += 1
+                            else:
+                                failure_total += 1
+                                failure_buckets[_bucket_failure(err)] += 1
+                            next_idx += 1
+                finally:
+                    executor.shutdown(wait=False, cancel_futures=True)
+        except KeyboardInterrupt:
+            sys.stderr.write("Interrupted by user, exiting gracefully.\n")
+            if args.workers > 1:
                 signal.signal(signal.SIGINT, signal.SIG_IGN)
-                executor.shutdown(wait=False, cancel_futures=True)
-                return 130
-            finally:
-                executor.shutdown(wait=False, cancel_futures=True)
+            return 130
+        finally:
+            _emit_stats(processed, success_total, failure_total, skipped, failure_buckets)
 
     if output is not sys.stdout:
         output.close()

@@ -272,6 +272,7 @@ def _extract_from_html(html: str) -> Optional[str]:
 
 def extract_cdn_url_detail(
     share_url: str,
+    client_identifier: Optional[str] = None,
     cookie: Optional[str] = None,
     cookie_file: Optional[str] = None,
     proxy: Optional[str] = None,
@@ -279,10 +280,17 @@ def extract_cdn_url_detail(
     timeout: int = 10,
     jitter: Tuple[float, float] = (0.0, 0.0),
 ) -> Tuple[Optional[str], str]:
-    session = tls_client.Session(
-        client_identifier="chrome_120",
-        random_tls_extension_order=True,
-    )
+    session_kwargs = {
+        "client_identifier": client_identifier or "chrome_120",
+        "random_tls_extension_order": True,
+    }
+    try:
+        session = tls_client.Session(**session_kwargs)
+    except Exception:
+        session = tls_client.Session(
+            client_identifier="chrome_120",
+            random_tls_extension_order=True,
+        )
     session.headers.update({
         "User-Agent": DEFAULT_UA,
         "Referer": "https://www.kuaishou.com/",
@@ -365,6 +373,7 @@ def extract_cdn_url_detail(
 
 def extract_cdn_url(
     share_url: str,
+    client_identifier: Optional[str] = None,
     cookie: Optional[str] = None,
     cookie_file: Optional[str] = None,
     proxy: Optional[str] = None,
@@ -373,6 +382,7 @@ def extract_cdn_url(
 ) -> Optional[str]:
     url, _ = extract_cdn_url_detail(
         share_url,
+        client_identifier=client_identifier,
         cookie=cookie,
         cookie_file=cookie_file,
         proxy=proxy,
