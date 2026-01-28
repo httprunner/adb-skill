@@ -152,7 +152,10 @@ def process_one(
         request_overrides["proxies"] = {"http": proxy, "https": proxy}
     cookie_value = load_cookie_value(cookie=cookie, cookie_file=cookie_file)
     if cookie_value:
-        request_overrides["cookies"] = cookie_value
+        headers = request_overrides.get("headers") or {}
+        headers = dict(headers)
+        headers["Cookie"] = cookie_value
+        request_overrides["headers"] = headers
     try:
         cdn_url = resolve_cdn_url(resolved, request_overrides)
         if not cdn_url:
