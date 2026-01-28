@@ -4,6 +4,6 @@ version = "0.1.0"
 description = "Resolve Kuaishou share links to CDN URLs using videodl (videofetch) or GraphQL fallback."
 requires-python = ">=3.9"
 dependencies = [
-  "videofetch",
+  "videofetch @ git+https://github.com/debugtalk/videodl@master",
   "tls-client",
 ]
