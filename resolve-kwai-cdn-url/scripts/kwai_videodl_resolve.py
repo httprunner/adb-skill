@@ -14,6 +14,7 @@ import signal
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Iterable, List, Optional, Sequence, Tuple
+from urllib.parse import urlparse
 
 import requests
 from videodl import videodl as videodl_lib
@@ -42,12 +43,22 @@ def extract_first_url(text: str) -> Optional[str]:
     url = match.group(0)
     return url.strip(" \t\r\n\"'<>[](){}，。；;:!?")
 
+def build_proxies(proxy: Optional[str]) -> Optional[dict]:
+    if not proxy:
+        return None
+    scheme = urlparse(proxy).scheme.lower()
+    if scheme == "http":
+        return {"http": proxy}
+    if scheme == "https":
+        return {"https": proxy}
+    return {"http": proxy, "https": proxy}
+
 
 def resolve_short_url(url: str, timeout: float, proxy: Optional[str]) -> str:
     if "v.kuaishou.com" not in url:
         return url
     try:
-        proxies = {"http": proxy, "https": proxy} if proxy else None
+        proxies = build_proxies(proxy)
         resp = requests.get(
             url,
             allow_redirects=True,
@@ -64,7 +75,7 @@ def detect_unavailable_reason(
     url: str, timeout: float, proxy: Optional[str]
 ) -> Optional[str]:
     try:
-        proxies = {"http": proxy, "https": proxy} if proxy else None
+        proxies = build_proxies(proxy)
         resp = requests.get(
             url,
             allow_redirects=True,
@@ -149,7 +160,7 @@ def process_one(
     resolved = resolve_short_url(url, timeout=timeout, proxy=proxy)
     request_overrides = {"timeout": timeout}
     if proxy:
-        request_overrides["proxies"] = {"http": proxy, "https": proxy}
+        request_overrides["proxies"] = build_proxies(proxy)
     cookie_value = load_cookie_value(cookie=cookie, cookie_file=cookie_file)
     if cookie_value:
         headers = request_overrides.get("headers") or {}
