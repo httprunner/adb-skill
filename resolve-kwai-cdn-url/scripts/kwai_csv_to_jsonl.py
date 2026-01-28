@@ -149,7 +149,7 @@ def main() -> int:
             return 0
         total_remaining = len(rows)
         completed = skipped
-        success = 0
+        success_batch = 0
 
         if args.workers <= 1:
             try:
@@ -171,11 +171,12 @@ def main() -> int:
                     _write_jsonl_row(row, output)
                     completed += 1
                     if cdn_url:
-                        success += 1
+                        success_batch += 1
                     if args.progress_every and completed % args.progress_every == 0:
                         sys.stderr.write(
-                            f"progress: {completed}/{total} success: {success}\n"
+                            f"progress: {completed}/{total} success: {success_batch}\n"
                         )
+                        success_batch = 0
                     if args.sleep:
                         time.sleep(args.sleep)
             except KeyboardInterrupt:
@@ -211,11 +212,12 @@ def main() -> int:
                     ready[idx] = results[idx]
                     completed += 1
                     if results[idx][0]:
-                        success += 1
+                        success_batch += 1
                     if args.progress_every and completed % args.progress_every == 0:
                         sys.stderr.write(
-                            f"progress: {completed}/{total} success: {success}\n"
+                            f"progress: {completed}/{total} success: {success_batch}\n"
                         )
+                        success_batch = 0
 
                     while next_idx in ready:
                         cdn_url, err = ready.pop(next_idx)
