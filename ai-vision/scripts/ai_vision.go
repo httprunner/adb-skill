@@ -162,6 +162,7 @@ func runQuery(args []string) int {
 		result.Content = content
 		result.Thought = "Failed to parse structured response"
 	}
+	normalizeQueryResult(&result, sz, content)
 
 	output := map[string]interface{}{
 		"size":   sz,
@@ -478,6 +479,9 @@ func processArgument(name string, value interface{}, sz size) (interface{}, erro
 			if len(box) == 4 && maxFloat(box) <= 1000 {
 				box = scaleRelativeBox(box, sz)
 			}
+			if len(box) == 2 && maxFloat(box) <= 1000 {
+				box = scaleRelativePoint(box, sz)
+			}
 			if len(box) == 2 {
 				return []float64{box[0], box[1]}, nil
 			}
@@ -487,11 +491,32 @@ func processArgument(name string, value interface{}, sz size) (interface{}, erro
 			if len(v) == 4 && maxFloat(v) <= 1000 {
 				v = scaleRelativeBox(v, sz)
 			}
+			if len(v) == 2 && maxFloat(v) <= 1000 {
+				v = scaleRelativePoint(v, sz)
+			}
 			if len(v) == 2 {
 				return v, nil
 			}
 			if len(v) == 4 {
 				center := boxCenter(v)
+				return []float64{center[0], center[1]}, nil
+			}
+		case []interface{}:
+			coords, err := parseInterfaceCoords(v)
+			if err != nil {
+				return nil, err
+			}
+			if len(coords) == 4 && maxFloat(coords) <= 1000 {
+				coords = scaleRelativeBox(coords, sz)
+			}
+			if len(coords) == 2 && maxFloat(coords) <= 1000 {
+				coords = scaleRelativePoint(coords, sz)
+			}
+			if len(coords) == 2 {
+				return coords, nil
+			}
+			if len(coords) == 4 {
+				center := boxCenter(coords)
 				return []float64{center[0], center[1]}, nil
 			}
 		}
@@ -570,6 +595,16 @@ func maxFloat(vals []float64) float64 {
 	return max
 }
 
+func scaleRelativePoint(pt []float64, sz size) []float64 {
+	if len(pt) != 2 {
+		return pt
+	}
+	return []float64{
+		pt[0] / 1000 * float64(sz.Width),
+		pt[1] / 1000 * float64(sz.Height),
+	}
+}
+
 func scaleRelativeBox(box []float64, sz size) []float64 {
 	if len(box) != 4 {
 		return box
@@ -580,6 +615,40 @@ func scaleRelativeBox(box []float64, sz size) []float64 {
 		box[2] / 1000 * float64(sz.Width),
 		box[3] / 1000 * float64(sz.Height),
 	}
+}
+
+func parseInterfaceCoords(values []interface{}) ([]float64, error) {
+	if len(values) == 0 {
+		return nil, errors.New("empty coordinate array")
+	}
+	coords := make([]float64, 0, len(values))
+	for _, v := range values {
+		switch t := v.(type) {
+		case float64:
+			coords = append(coords, t)
+		case float32:
+			coords = append(coords, float64(t))
+		case int:
+			coords = append(coords, float64(t))
+		case int64:
+			coords = append(coords, float64(t))
+		case json.Number:
+			f, err := t.Float64()
+			if err != nil {
+				return nil, err
+			}
+			coords = append(coords, f)
+		case string:
+			parsed, err := parseBoxString(t)
+			if err != nil {
+				return nil, err
+			}
+			coords = append(coords, parsed...)
+		default:
+			return nil, fmt.Errorf("unsupported coordinate value type: %T", v)
+		}
+	}
+	return coords, nil
 }
 
 func parseStructuredResponse(content string, result interface{}) error {
@@ -595,11 +664,83 @@ func parseStructuredResponse(content string, result interface{}) error {
 	return json.Unmarshal([]byte(cleaned), result)
 }
 
+func normalizeQueryResult(result *queryResult, sz size, content string) {
+	raw := extractJSONFromContent(strings.TrimSpace(content))
+	if raw == "" {
+		raw = strings.TrimSpace(content)
+	}
+	var payload map[string]interface{}
+	if err := json.Unmarshal([]byte(raw), &payload); err != nil {
+		if result.Content == "" {
+			result.Content = strings.TrimSpace(content)
+		}
+		return
+	}
+
+	x, xOK := asFloat(payload["x"])
+	y, yOK := asFloat(payload["y"])
+	if !xOK || !yOK {
+		if result.Content == "" {
+			result.Content = strings.TrimSpace(content)
+		}
+		return
+	}
+	w, _ := asFloat(payload["w"])
+	h, _ := asFloat(payload["h"])
+
+	maxVal := maxFloat([]float64{x, y, w, h})
+	if maxVal > 0 && maxVal <= 1000 && sz.Width > 0 && sz.Height > 0 {
+		x = x / 1000 * float64(sz.Width)
+		y = y / 1000 * float64(sz.Height)
+		if w > 0 {
+			w = w / 1000 * float64(sz.Width)
+		}
+		if h > 0 {
+			h = h / 1000 * float64(sz.Height)
+		}
+		payload["x"] = x
+		payload["y"] = y
+		if w > 0 {
+			payload["w"] = w
+		}
+		if h > 0 {
+			payload["h"] = h
+		}
+	}
+
+	normalized, err := json.Marshal(payload)
+	if err == nil {
+		result.Content = string(normalized)
+		result.Data = normalized
+	} else if result.Content == "" {
+		result.Content = strings.TrimSpace(content)
+	}
+}
+
+func asFloat(v interface{}) (float64, bool) {
+	switch t := v.(type) {
+	case float64:
+		return t, true
+	case float32:
+		return float64(t), true
+	case int:
+		return float64(t), true
+	case int64:
+		return float64(t), true
+	case json.Number:
+		f, err := t.Float64()
+		return f, err == nil
+	default:
+		return 0, false
+	}
+}
+
 func extractResponseText(data []byte) (string, error) {
 	var parsed struct {
 		Output []struct {
 			Content []struct {
-				Text string `json:"text"`
+				Text       string `json:"text"`
+				OutputText string `json:"output_text"`
 			} `json:"content"`
 		} `json:"output"`
 		Choices []struct {
@@ -616,6 +757,9 @@ func extractResponseText(data []byte) (string, error) {
 			for _, content := range item.Content {
 				if strings.TrimSpace(content.Text) != "" {
 					return content.Text, nil
+				}
+				if strings.TrimSpace(content.OutputText) != "" {
+					return content.OutputText, nil
 				}
 			}
 		}
@@ -667,9 +811,10 @@ func extractJSONFromContent(content string) string {
 				continue
 			}
 			if !inString {
-				if ch == '{' {
+				switch ch {
+				case '{':
 					braceCount++
-				} else if ch == '}' {
+				case '}':
 					braceCount--
 					if braceCount == 0 {
 						return strings.TrimSpace(content[start : i+1])
