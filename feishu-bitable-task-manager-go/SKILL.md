@@ -42,13 +42,64 @@ Follow the task table conventions when pulling and updating tasks in Feishu Bita
 - Accept JSON/JSONL input (same key conventions as update); map `CDNURL`/`cdn_url` to `Extra`.
 - Use `--skip-existing <fields>` to skip creation when existing records match on the given fields (all must match).
 
-## Build
+## Run (Use `go run`)
 
-From this skill directory:
+Use `go run` so you can execute without building a binary:
 
 ```bash
-go build -o bin/bitable-task ./cmd/bitable-task
+go run ./cmd/bitable-task <subcommand> [flags]
 ```
+
+If `go` is not available, install a Go toolchain first (match `go.mod`):
+
+macOS (install to user dir; auto-pick arch):
+
+```bash
+GO_VER="go1.22.0"
+ARCH="$(uname -m)"
+case "${ARCH}" in
+  arm64) GO_ARCH="arm64" ;;
+  x86_64) GO_ARCH="amd64" ;;
+  *) echo "Unsupported arch: ${ARCH}"; exit 1 ;;
+esac
+curl -LO "https://go.dev/dl/${GO_VER}.darwin-${GO_ARCH}.tar.gz"
+rm -rf "${HOME}/.local/go"
+mkdir -p "${HOME}/.local"
+tar -C "${HOME}/.local" -xzf "${GO_VER}.darwin-${GO_ARCH}.tar.gz"
+```
+
+Linux (install to user dir; auto-pick arch):
+
+```bash
+GO_VER="go1.22.0"
+ARCH="$(uname -m)"
+case "${ARCH}" in
+  aarch64) GO_ARCH="arm64" ;;
+  x86_64) GO_ARCH="amd64" ;;
+  *) echo "Unsupported arch: ${ARCH}"; exit 1 ;;
+esac
+curl -LO "https://go.dev/dl/${GO_VER}.linux-${GO_ARCH}.tar.gz"
+rm -rf "${HOME}/.local/go"
+mkdir -p "${HOME}/.local"
+tar -C "${HOME}/.local" -xzf "${GO_VER}.linux-${GO_ARCH}.tar.gz"
+```
+
+Windows (PowerShell, auto-pick arch):
+
+```powershell
+$GoVer = "go1.22.0"
+$Arch = $env:PROCESSOR_ARCHITECTURE
+switch ($Arch) {
+  "ARM64" { $GoArch = "arm64" }
+  "AMD64" { $GoArch = "amd64" }
+  default { throw "Unsupported arch: $Arch" }
+}
+curl.exe -LO "https://go.dev/dl/$GoVer.windows-$GoArch.zip"
+if (Test-Path C:\Go) { Remove-Item -Recurse -Force C:\Go }
+tar -C C:\ -xf "$GoVer.windows-$GoArch.zip"
+```
+
+Ensure `${HOME}/.local/go/bin` (macOS/Linux) or `C:\Go\bin` (Windows) is on `PATH`, then re-run the `go run` command above.
 
 ## Examples
 
@@ -56,11 +107,11 @@ go build -o bin/bitable-task ./cmd/bitable-task
 export FEISHU_APP_ID=...
 export FEISHU_APP_SECRET=...
 export TASK_BITABLE_URL="https://.../base/APP_TOKEN?table=TABLE_ID&view=VIEW_ID"
-bin/bitable-task fetch --app com.smile.gifmaker --scene 综合页搜索 --status pending --date Today --limit 10
+go run ./cmd/bitable-task fetch --app com.smile.gifmaker --scene 综合页搜索 --status pending --date Today --limit 10
 ```
 
 ```bash
-bin/bitable-task update \
+go run ./cmd/bitable-task update \
   --task-id 180413 \
   --status running \
   --device-serial 1fa20bb \
@@ -70,7 +121,7 @@ bin/bitable-task update \
 Update single task by BizTaskID:
 
 ```bash
-bin/bitable-task update \
+go run ./cmd/bitable-task update \
   --biz-task-id ext-20240101-001 \
   --status success \
   --completed-at now
@@ -79,13 +130,13 @@ bin/bitable-task update \
 Update from JSONL output (per-line task updates):
 
 ```bash
-bin/bitable-task update --input output.jsonl
+go run ./cmd/bitable-task update --input output.jsonl
 ```
 
 Update from JSONL with CLI defaults for missing fields:
 
 ```bash
-bin/bitable-task update \
+go run ./cmd/bitable-task update \
   --input tasks.jsonl \
   --status ready \
   --date 2026-01-27
@@ -94,7 +145,7 @@ bin/bitable-task update \
 Create tasks from JSONL with defaults:
 
 ```bash
-bin/bitable-task create \
+go run ./cmd/bitable-task create \
   --input tasks.jsonl \
   --app com.smile.gifmaker \
   --scene 单个链接采集 \
@@ -105,7 +156,7 @@ bin/bitable-task create \
 Create from JSONL and skip when BizTaskID already exists:
 
 ```bash
-bin/bitable-task create \
+go run ./cmd/bitable-task create \
   --input tasks.jsonl \
   --app com.smile.gifmaker \
   --scene 单个链接采集 \
@@ -117,7 +168,7 @@ bin/bitable-task create \
 Create from JSONL and skip when both BookID and UserID match existing records:
 
 ```bash
-bin/bitable-task create \
+go run ./cmd/bitable-task create \
   --input tasks.jsonl \
   --skip-existing BookID,UserID
 ```
@@ -125,7 +176,7 @@ bin/bitable-task create \
 Create a single task with explicit fields:
 
 ```bash
-bin/bitable-task create \
+go run ./cmd/bitable-task create \
   --biz-task-id GYS2601290001 \
   --app com.smile.gifmaker \
   --scene 单个链接采集 \
@@ -145,4 +196,3 @@ bin/bitable-task create \
 - `cmd/bitable-task`: single CLI entrypoint (`fetch`/`update`/`create`).
 - `internal/common/common.go`: Feishu OpenAPI HTTP + token/wiki helpers + value/timestamp coercion + env field mapping.
 - `internal/cli/*.go`: CLI implementation for fetch/update/create, JSON/JSONL ingestion, and skip rules.
-
