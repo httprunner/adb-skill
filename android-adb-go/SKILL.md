@@ -24,6 +24,33 @@ If `go` is not available, use the `go-installer` skill first. If that skill is n
   - `--parse` outputs clickable elements (buttons) and input fields (EditText).
 - Use this to find coordinates for `tap` or text/resource-ids for validation.
 
+## UI Inspection (Vision-Based via ai-vision)
+
+If `dump-ui` returns empty/partial trees, call the `ai-vision` skill to infer coordinates from a screenshot, then feed those coordinates into `adb` taps. This keeps UI understanding separate from device control.
+
+Quick flow:
+1. Capture screenshot.
+2. Use `ai-vision` to query coordinates or assert UI text.
+3. Apply returned `(x, y)` with `go run scripts/adb_helpers.go tap X Y`.
+
+Example:
+```bash
+# 1) Screenshot
+go run scripts/adb_helpers.go -s SERIAL screenshot -out screen.png
+
+# 2) Query coordinates with ai-vision
+go run ../ai-vision/scripts/ai_vision.go query \
+  --screenshot screen.png \
+  --prompt "请识别屏幕上与“搜索”相关的文字或放大镜图标，并返回其坐标"
+
+# 3) Tap returned coordinates
+go run scripts/adb_helpers.go -s SERIAL tap X Y
+```
+
+Notes:
+- Keep prompts explicit (exact text/icon description + request center coordinates).
+- Validate by taking another screenshot and retrying with a tighter prompt if needed.
+
 ## When running commands
 
 - Always include `-s <device_id>` if more than one device is connected.
