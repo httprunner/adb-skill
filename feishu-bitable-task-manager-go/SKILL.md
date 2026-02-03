@@ -50,56 +50,7 @@ Use `go run` so you can execute without building a binary:
 go run ./cmd/bitable-task <subcommand> [flags]
 ```
 
-If `go` is not available, install a Go toolchain first (match `go.mod`):
-
-macOS (install to user dir; auto-pick arch):
-
-```bash
-GO_VER="go1.22.0"
-ARCH="$(uname -m)"
-case "${ARCH}" in
-  arm64) GO_ARCH="arm64" ;;
-  x86_64) GO_ARCH="amd64" ;;
-  *) echo "Unsupported arch: ${ARCH}"; exit 1 ;;
-esac
-curl -LO "https://go.dev/dl/${GO_VER}.darwin-${GO_ARCH}.tar.gz"
-rm -rf "${HOME}/.local/go"
-mkdir -p "${HOME}/.local"
-tar -C "${HOME}/.local" -xzf "${GO_VER}.darwin-${GO_ARCH}.tar.gz"
-```
-
-Linux (install to user dir; auto-pick arch):
-
-```bash
-GO_VER="go1.22.0"
-ARCH="$(uname -m)"
-case "${ARCH}" in
-  aarch64) GO_ARCH="arm64" ;;
-  x86_64) GO_ARCH="amd64" ;;
-  *) echo "Unsupported arch: ${ARCH}"; exit 1 ;;
-esac
-curl -LO "https://go.dev/dl/${GO_VER}.linux-${GO_ARCH}.tar.gz"
-rm -rf "${HOME}/.local/go"
-mkdir -p "${HOME}/.local"
-tar -C "${HOME}/.local" -xzf "${GO_VER}.linux-${GO_ARCH}.tar.gz"
-```
-
-Windows (PowerShell, auto-pick arch):
-
-```powershell
-$GoVer = "go1.22.0"
-$Arch = $env:PROCESSOR_ARCHITECTURE
-switch ($Arch) {
-  "ARM64" { $GoArch = "arm64" }
-  "AMD64" { $GoArch = "amd64" }
-  default { throw "Unsupported arch: $Arch" }
-}
-curl.exe -LO "https://go.dev/dl/$GoVer.windows-$GoArch.zip"
-if (Test-Path C:\Go) { Remove-Item -Recurse -Force C:\Go }
-tar -C C:\ -xf "$GoVer.windows-$GoArch.zip"
-```
-
-Ensure `${HOME}/.local/go/bin` (macOS/Linux) or `C:\Go\bin` (Windows) is on `PATH`, then re-run the `go run` command above.
+If `go` is not available, install a Go toolchain first using the `go-installer` skill. If that skill is not available, install it with `npx skills add httprunner/skills@go-installer`. Re-run the `go run` command above.
 
 ## Examples
 

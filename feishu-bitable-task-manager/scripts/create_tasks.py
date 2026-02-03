@@ -7,7 +7,7 @@ import argparse
 import json
 import sys
 import time
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import bitable_common as common
 

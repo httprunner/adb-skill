@@ -7,6 +7,8 @@ description: Android device control and UI automation via ADB with a Go helper C
 
 Use this skill to drive Android devices with `adb` and the Go helper CLI for common device management and UI actions.
 
+If `go` is not available, use the `go-installer` skill first. If that skill is not available, install it with `npx skills add httprunner/skills@go-installer`.
+
 ## Quick workflow
 
 - Identify device: `adb devices -l`. If multiple devices, always use `-s <device_id>`.
