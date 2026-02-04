@@ -27,6 +27,11 @@ Run with:
 go run scripts/ai_vision.go --help
 ```
 
+Log level (for troubleshooting raw model response):
+```bash
+go run scripts/ai_vision.go --log-level debug <command> [flags]
+```
+
 ### AIQuery
 ```bash
 go run scripts/ai_vision.go query \
@@ -52,7 +57,11 @@ go run scripts/ai_vision.go plan-next \
 - `plan-next` returns a normalized next action with absolute pixel coordinates.
 - If the model outputs relative coordinates (1000x1000), the script scales to screen pixels.
 - Combine with adb/hdc actions (e.g., `adb shell input tap X Y`) for device control.
+- Use `--log-level debug` to print the raw model response for troubleshooting.
 
 ## Default Models (Doubao)
 - `doubao-seed-1-8-251228`
 - `doubao-seed-1-6-vision-250815`
+
+## References
+- `references/doubao-api.md`

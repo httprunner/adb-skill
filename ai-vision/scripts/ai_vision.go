@@ -83,16 +83,18 @@ type planResult struct {
 	Thought string          `json:"thought"`
 	Actions []plannedAction `json:"actions"`
 	Content string          `json:"content"`
+	Status  string          `json:"status,omitempty"`
 }
 
-func setLoggerJSON(enabled bool) {
-	if enabled {
-		logger = slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
-		errLogger = slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo}))
+func setLoggerConfig(jsonEnabled bool, level slog.Level) {
+	handlerOptions := &slog.HandlerOptions{Level: level}
+	if jsonEnabled {
+		logger = slog.New(slog.NewJSONHandler(os.Stdout, handlerOptions))
+		errLogger = slog.New(slog.NewJSONHandler(os.Stderr, handlerOptions))
 		return
 	}
-	logger = slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
-	errLogger = slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo}))
+	logger = slog.New(slog.NewTextHandler(os.Stdout, handlerOptions))
+	errLogger = slog.New(slog.NewTextHandler(os.Stderr, handlerOptions))
 }
 
 func setFlagUsage(fs *flag.FlagSet, usageLine string) {
@@ -104,10 +106,11 @@ func setFlagUsage(fs *flag.FlagSet, usageLine string) {
 	}
 }
 
-func rootFlagSet(out *os.File) (*flag.FlagSet, *bool) {
+func rootFlagSet(out *os.File) (*flag.FlagSet, *bool, *string) {
 	fs := flag.NewFlagSet("ai_vision", flag.ContinueOnError)
 	fs.SetOutput(out)
 	logJSON := fs.Bool("log-json", false, "Output logs in JSON")
+	logLevel := fs.String("log-level", "info", "Log level: debug or info")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage:")
 		fmt.Fprintln(fs.Output(), "  ai_vision [--log-json] <command> [flags]")
@@ -124,11 +127,11 @@ func rootFlagSet(out *os.File) (*flag.FlagSet, *bool) {
 		fmt.Fprintln(fs.Output(), "  ARK_BASE_URL, ARK_API_KEY, ARK_MODEL_NAME")
 		fmt.Fprintln(fs.Output(), "For other providers, pass --base-url/--api-key/--model")
 	}
-	return fs, logJSON
+	return fs, logJSON, logLevel
 }
 
 func main() {
-	fs, logJSON := rootFlagSet(os.Stderr)
+	fs, logJSON, logLevel := rootFlagSet(os.Stderr)
 	if hasHelpArg(os.Args[1:]) {
 		fs.SetOutput(os.Stdout)
 	}
@@ -138,7 +141,11 @@ func main() {
 		}
 		os.Exit(2)
 	}
-	setLoggerJSON(*logJSON)
+	level := slog.LevelInfo
+	if strings.EqualFold(*logLevel, "debug") {
+		level = slog.LevelDebug
+	}
+	setLoggerConfig(*logJSON, level)
 	args := fs.Args()
 	if len(args) == 0 || args[0] == "help" {
 		fs.SetOutput(os.Stdout)
@@ -206,7 +213,7 @@ func runQuery(args []string) int {
 
 	systemPrompt := defaultQueryPrompt
 
-	content, err := callModel(cfg, systemPrompt, *prompt, imgB64)
+	content, status, err := callModel(cfg, systemPrompt, *prompt, imgB64)
 	if err != nil {
 		errLogger.Error("call model failed", "err", err)
 		return 1
@@ -224,6 +231,7 @@ func runQuery(args []string) int {
 		"size":   sz,
 		"result": result,
 		"model":  cfg.Model,
+		"status": status,
 	}
 	return printJSON(output)
 }
@@ -264,7 +272,7 @@ func runAssert(args []string) int {
 
 	systemPrompt := defaultAssertionPrompt
 
-	content, err := callModel(cfg, systemPrompt, *assertion, imgB64)
+	content, status, err := callModel(cfg, systemPrompt, *assertion, imgB64)
 	if err != nil {
 		errLogger.Error("call model failed", "err", err)
 		return 1
@@ -280,6 +288,7 @@ func runAssert(args []string) int {
 		"size":   sz,
 		"result": result,
 		"model":  cfg.Model,
+		"status": status,
 	}
 	return printJSON(output)
 }
@@ -328,7 +337,7 @@ func runPlanNext(args []string) int {
 		userPrompt = fmt.Sprintf("Instruction:\n%s\n\nHistory:\n%s", prompt, strings.TrimSpace(*history))
 	}
 
-	content, err := callModel(cfg, systemPrompt, userPrompt, imgB64)
+	content, status, err := callModel(cfg, systemPrompt, userPrompt, imgB64)
 	if err != nil {
 		errLogger.Error("call model failed", "err", err)
 		return 1
@@ -339,6 +348,7 @@ func runPlanNext(args []string) int {
 		errLogger.Error("parse JSON planning failed", "err", err)
 		return 1
 	}
+	result.Status = status
 	return printJSON(result)
 }
 
@@ -367,7 +377,7 @@ func getModelConfig(modelName, baseURL, apiKey string) (*modelConfig, error) {
 	return &modelConfig{BaseURL: baseURL, APIKey: apiKey, Model: modelName}, nil
 }
 
-func callModel(cfg *modelConfig, systemPrompt, userPrompt, imgB64 string) (string, error) {
+func callModel(cfg *modelConfig, systemPrompt, userPrompt, imgB64 string) (string, string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
@@ -397,37 +407,39 @@ func callModel(cfg *modelConfig, systemPrompt, userPrompt, imgB64 string) (strin
 
 	body, err := json.Marshal(reqBody)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(body))
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+cfg.APIKey)
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 300 {
 		msg, _ := io.ReadAll(resp.Body)
-		return "", fmt.Errorf("model request failed: %s: %s", resp.Status, strings.TrimSpace(string(msg)))
+		return "", "", fmt.Errorf("model request failed: %s: %s", resp.Status, strings.TrimSpace(string(msg)))
 	}
 
 	data, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
+	logger.Debug("model raw response", "data", string(data))
 
 	text, err := extractResponseText(data)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
-	return text, nil
+	status := extractResponseStatus(data)
+	return text, status, nil
 }
 
 func loadImage(path string) (string, size, error) {
@@ -808,37 +820,56 @@ func asFloat(v interface{}) (float64, bool) {
 func extractResponseText(data []byte) (string, error) {
 	var parsed struct {
 		Output []struct {
+			Type    string `json:"type"`
+			Status  string `json:"status"`
+			Partial bool   `json:"partial"`
 			Content []struct {
-				Text       string `json:"text"`
-				OutputText string `json:"output_text"`
+				Type string `json:"type"`
+				Text string `json:"text"`
 			} `json:"content"`
 		} `json:"output"`
-		Choices []struct {
-			Message struct {
-				Content string `json:"content"`
-			} `json:"message"`
-		} `json:"choices"`
 	}
 	if err := json.Unmarshal(data, &parsed); err != nil {
 		return "", err
 	}
-	if len(parsed.Output) > 0 {
-		for _, item := range parsed.Output {
-			for _, content := range item.Content {
-				if strings.TrimSpace(content.Text) != "" {
-					return content.Text, nil
-				}
-				if strings.TrimSpace(content.OutputText) != "" {
-					return content.OutputText, nil
-				}
+	var out strings.Builder
+	for _, item := range parsed.Output {
+		if item.Type != "message" {
+			continue
+		}
+		if item.Status != "" && item.Status != "completed" {
+			logger.Debug("model output status", "status", item.Status, "partial", item.Partial)
+		}
+		for _, content := range item.Content {
+			if content.Type != "output_text" {
+				continue
 			}
+			text := strings.TrimSpace(content.Text)
+			if text == "" {
+				continue
+			}
+			if out.Len() > 0 {
+				out.WriteString("\n")
+			}
+			out.WriteString(text)
 		}
 	}
-	if len(parsed.Choices) > 0 {
-		return parsed.Choices[0].Message.Content, nil
+	if out.Len() == 0 {
+		return "", errors.New("empty model response")
 	}
-	return "", errors.New("empty model response")
+	return out.String(), nil
 }
+
+func extractResponseStatus(data []byte) string {
+	var meta struct {
+		Status string `json:"status"`
+	}
+	if err := json.Unmarshal(data, &meta); err != nil {
+		return ""
+	}
+	return meta.Status
+}
+
 
 func extractJSONFromContent(content string) string {
 	if strings.Contains(content, "```json") {
@@ -903,6 +934,24 @@ func cleanJSONContent(content string) string {
 }
 
 func printJSON(v interface{}) int {
+	switch t := v.(type) {
+	case *planResult:
+		logger.Info("result", "status", t.Status, "thought", t.Thought, "actions", t.Actions)
+		return 0
+	case planResult:
+		logger.Info("result", "status", t.Status, "thought", t.Thought, "actions", t.Actions)
+		return 0
+	case map[string]interface{}:
+		status, _ := t["status"].(string)
+		if result, ok := t["result"].(queryResult); ok {
+			logger.Info("result", "status", status, "thought", result.Thought, "content", result.Content, "data", result.Data)
+			return 0
+		}
+		if result, ok := t["result"].(assertionResult); ok {
+			logger.Info("result", "status", status, "pass", result.Pass, "thought", result.Thought, "content", result.Content)
+			return 0
+		}
+	}
 	logger.Info("result", "data", v)
 	return 0
 }
