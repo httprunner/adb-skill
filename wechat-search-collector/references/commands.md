@@ -6,6 +6,7 @@
 - 所有 `android-adb-go` 命令在 `android-adb-go` 目录执行。
 - 所有 `ai-vision` 命令在 `ai-vision` 目录执行。
 - 截图目录统一为 `~/.eval/screenshots/`。
+- `ai-vision` 会返回已转换的绝对像素坐标，直接用于 `adb_helpers.go` 操作。
 
 ## 预检
 - 列出设备并获取 serial：
@@ -20,6 +21,8 @@
 ## 启动微信
 - 查看当前前台应用：
   `go run scripts/adb_helpers.go -s SERIAL get-current-app`
+- 返回手机桌面（多次 BACK 直到桌面，含 500ms~1s 随机间隔）：
+  `for i in {1..5}; do go run scripts/adb_helpers.go -s SERIAL keyevent KEYCODE_BACK; sleep 0.$((RANDOM%6+5)); done`
 - 启动微信：
   `go run scripts/adb_helpers.go -s SERIAL launch com.tencent.mm`
 
@@ -29,7 +32,7 @@
   `go run scripts/adb_helpers.go -s SERIAL screenshot -out "$SCREENSHOT"`
 - 通过 ai-vision 获取下一步点击坐标：
   `go run scripts/ai_vision.go plan-next --screenshot "$SCREENSHOT" --instruction "<你的操作指令>"`
-- 点击坐标：
+- 点击坐标（ai-vision 输出为 0-1000 相对坐标，adb_helpers 会自动转换为绝对坐标）：
   `go run scripts/adb_helpers.go -s SERIAL tap X Y`
 
 ## 进入搜索页前的滑动
