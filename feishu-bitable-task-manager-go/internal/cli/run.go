@@ -2,40 +2,75 @@ package cli
 
 import (
 	"flag"
+	"fmt"
 	"os"
 	"strings"
 )
 
 func Run(args []string) int {
-	if len(args) == 0 || args[0] == "-h" || args[0] == "--help" || args[0] == "help" {
-		printRootUsage()
+	fs, logJSON := rootFlagSet(os.Stderr)
+	if err := fs.Parse(args); err != nil {
+		if err == flag.ErrHelp {
+			fs.SetOutput(os.Stdout)
+			fs.Usage()
+			return 0
+		}
+		return 2
+	}
+	setLoggerJSON(*logJSON)
+	rest := fs.Args()
+	if len(rest) == 0 || rest[0] == "-h" || rest[0] == "--help" || rest[0] == "help" {
+		fs.SetOutput(os.Stdout)
+		fs.Usage()
 		return 0
 	}
 
-	switch args[0] {
+	switch rest[0] {
 	case "fetch":
-		return runFetch(args[1:])
+		return runFetch(rest[1:])
 	case "update":
-		return runUpdate(args[1:])
+		return runUpdate(rest[1:])
 	case "create":
-		return runCreate(args[1:])
+		return runCreate(rest[1:])
 	default:
-		errLogger.Error("unknown command", "command", args[0])
-		printRootUsage()
+		errLogger.Error("unknown command", "command", rest[0])
+		fs.SetOutput(os.Stdout)
+		fs.Usage()
 		return 2
 	}
 }
 
-func printRootUsage() {
-	logUsage("Usage:")
-	logUsage("  bitable-task fetch [flags]")
-	logUsage("  bitable-task update [flags]")
-	logUsage("  bitable-task create [flags]")
-	logUsage("")
-	logUsage("Environment:")
-	logUsage("  FEISHU_APP_ID, FEISHU_APP_SECRET, TASK_BITABLE_URL (required)")
-	logUsage("  FEISHU_BASE_URL (optional, default: https://open.feishu.cn)")
-	logUsage("  TASK_FIELD_* overrides (optional)")
+func setFlagUsage(fs *flag.FlagSet, usageLine string) {
+	fs.Usage = func() {
+		fmt.Fprintln(fs.Output(), "Usage:")
+		fmt.Fprintln(fs.Output(), "  "+usageLine)
+		fmt.Fprintln(fs.Output(), "")
+		fs.PrintDefaults()
+	}
+}
+
+func rootFlagSet(out *os.File) (*flag.FlagSet, *bool) {
+	fs := flag.NewFlagSet("bitable-task", flag.ContinueOnError)
+	fs.SetOutput(out)
+	logJSON := fs.Bool("log-json", false, "Output logs in JSON")
+	fs.Usage = func() {
+		fmt.Fprintln(fs.Output(), "Usage:")
+		fmt.Fprintln(fs.Output(), "  bitable-task [--log-json] <command> [flags]")
+		fmt.Fprintln(fs.Output(), "")
+		fmt.Fprintln(fs.Output(), "Commands:")
+		fmt.Fprintln(fs.Output(), "  fetch   Fetch tasks from Bitable")
+		fmt.Fprintln(fs.Output(), "  update  Update tasks in Bitable")
+		fmt.Fprintln(fs.Output(), "  create  Create tasks in Bitable")
+		fmt.Fprintln(fs.Output(), "")
+		fmt.Fprintln(fs.Output(), "Global Flags:")
+		fs.PrintDefaults()
+		fmt.Fprintln(fs.Output(), "")
+		fmt.Fprintln(fs.Output(), "Environment:")
+		fmt.Fprintln(fs.Output(), "  FEISHU_APP_ID, FEISHU_APP_SECRET, TASK_BITABLE_URL (required)")
+		fmt.Fprintln(fs.Output(), "  FEISHU_BASE_URL (optional, default: https://open.feishu.cn)")
+		fmt.Fprintln(fs.Output(), "  TASK_FIELD_* overrides (optional)")
+	}
+	return fs, logJSON
 }
 
 func runFetch(args []string) int {
@@ -49,6 +84,7 @@ func runFetch(args []string) int {
 	var useView bool
 	fs := flag.NewFlagSet("fetch", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
+	setFlagUsage(fs, "bitable-task fetch [flags]")
 	fs.StringVar(&opts.TaskURL, "task-url", opts.TaskURL, "Bitable task table URL")
 	fs.StringVar(&opts.App, "app", "", "App value for filter (required)")
 	fs.StringVar(&opts.Scene, "scene", "", "Scene value for filter (required)")
@@ -85,6 +121,7 @@ func runUpdate(args []string) int {
 	var useView bool
 	fs := flag.NewFlagSet("update", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
+	setFlagUsage(fs, "bitable-task update [flags]")
 	fs.StringVar(&opts.TaskURL, "task-url", opts.TaskURL, "Bitable task table URL")
 	fs.StringVar(&opts.InputPath, "input", "", "Input JSON or JSONL file (use - for stdin)")
 	fs.IntVar(&opts.TaskID, "task-id", 0, "Single task id to update")
@@ -121,6 +158,7 @@ func runCreate(args []string) int {
 	}
 	fs := flag.NewFlagSet("create", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
+	setFlagUsage(fs, "bitable-task create [flags]")
 	fs.StringVar(&opts.TaskURL, "task-url", opts.TaskURL, "Bitable task table URL")
 	fs.StringVar(&opts.InputPath, "input", "", "Input JSON or JSONL file (use - for stdin)")
 	fs.StringVar(&opts.BizTaskID, "biz-task-id", "", "Biz task id to create")
