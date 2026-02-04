@@ -6,7 +6,7 @@ description: Multimodal UI understanding and single-step planning via OpenAI-com
 # AI Vision
 
 ## Overview
-This skill provides a standalone CLI to call multimodal models for UI querying, assertion, and **single-step** planning. It does not depend on device type; you supply a screenshot and receive structured output (coordinates, decisions, or next actions). Execution and multi-step loops are handled externally by agents using adb/hdc or other drivers.
+This skill provides a standalone CLI to call multimodal models for UI querying, assertion, and **single-step** planning. It does not depend on device type; you supply a screenshot and receive structured output (coordinates, decisions, or next actions). Execution and multi-step loops are handled externally by agents using adb/hdc or other drivers. Prefer storing screenshots in `~/.eval/screenshots/` and add timestamps to avoid overwriting.
 
 ## Model Configuration
 Default Doubao configuration via environment variables:
@@ -30,21 +30,21 @@ go run scripts/ai_vision.go --help
 ### AIQuery
 ```bash
 go run scripts/ai_vision.go query \
-  --screenshot screen.png \
+  --screenshot ~/.eval/screenshots/ui_YYYYMMDD_HHMMSS.png \
   --prompt "请识别屏幕上的‘搜索’按钮，并返回其坐标"
 ```
 
 ### AIAssert
 ```bash
 go run scripts/ai_vision.go assert \
-  --screenshot screen.png \
+  --screenshot ~/.eval/screenshots/ui_YYYYMMDD_HHMMSS.png \
   --assertion "当前页面包含搜索框"
 ```
 
 ### plan-next (single-step planning)
 ```bash
 go run scripts/ai_vision.go plan-next \
-  --screenshot screen.png \
+  --screenshot ~/.eval/screenshots/ui_YYYYMMDD_HHMMSS.png \
   --instruction "点击放大镜图标进入搜索页"
 ```
 

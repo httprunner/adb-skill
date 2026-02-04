@@ -15,7 +15,7 @@ If `go` is not available, use the `go-installer` skill first. If that skill is n
 - Verify readiness: device status should be `device`.
 - Prefer deterministic actions: tap/swipe/keyevent via `adb shell input`.
 - For text: prefer ADB Keyboard broadcast if installed; otherwise escape text for `adb shell input text`.
-- For screenshots: use `adb exec-out screencap -p > file.png` when possible.
+- For screenshots: use `adb exec-out screencap -p > file.png` when possible. Prefer a shared directory `~/.eval/screenshots/` and add timestamps to avoid overwriting.
 
 ## UI Inspection (Text-Based)
 
@@ -36,11 +36,13 @@ Quick flow:
 Example:
 ```bash
 # 1) Screenshot
-go run scripts/adb_helpers.go -s SERIAL screenshot -out screen.png
+mkdir -p ~/.eval/screenshots
+SCREENSHOT=~/.eval/screenshots/ui_$(date +"%Y%m%d_%H%M%S").png
+go run scripts/adb_helpers.go -s SERIAL screenshot -out "$SCREENSHOT"
 
 # 2) Query coordinates with ai-vision
 go run ../ai-vision/scripts/ai_vision.go query \
-  --screenshot screen.png \
+  --screenshot "$SCREENSHOT" \
   --prompt "请识别屏幕上与“搜索”相关的文字或放大镜图标，并返回其坐标"
 
 # 3) Tap returned coordinates
