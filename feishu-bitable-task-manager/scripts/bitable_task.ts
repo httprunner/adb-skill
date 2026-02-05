@@ -91,72 +91,10 @@ function setLoggerJSON(enabled: boolean) {
   errLogger = createLogger(enabled, process.stderr, errColor);
 }
 
-function printUsage(out: NodeJS.WriteStream) {
-  out.write("Usage:\n");
-  out.write("  bitable-task [--log-json] <command> [flags]\n\n");
-  out.write("Commands:\n");
-  out.write("  fetch   Fetch tasks from Bitable\n");
-  out.write("  update  Update tasks in Bitable\n");
-  out.write("  create  Create tasks in Bitable\n\n");
-  out.write("Global Flags:\n");
-  out.write("  --log-json   Output logs in JSON\n\n");
-  out.write("Environment:\n");
-  out.write("  FEISHU_APP_ID, FEISHU_APP_SECRET, TASK_BITABLE_URL (required)\n");
-  out.write("  FEISHU_BASE_URL (optional, default: https://open.feishu.cn)\n");
-  out.write("  TASK_FIELD_* overrides (optional)\n");
-}
-
 function getGlobalOptions(program: Command) {
   const opts = program.opts<{ logJson?: boolean }>();
   setLoggerJSON(Boolean(opts.logJson));
   return { logJson: Boolean(opts.logJson) };
-}
-
-function parseFlags(args: string[]) {
-  const flags: Record<string, string | boolean> = {};
-  const positionals: string[] = [];
-  for (let i = 0; i < args.length; i++) {
-    const arg = args[i];
-    if (arg === "-h" || arg === "--help") {
-      flags.help = true;
-      continue;
-    }
-    if (arg.startsWith("--")) {
-      const raw = arg.slice(2);
-      const [name, value] = raw.includes("=") ? raw.split("=", 2) : [raw, ""];
-      const key = name.replace(/-/g, "_");
-      if (value !== "") {
-        flags[key] = value;
-        continue;
-      }
-      if (i + 1 < args.length && !args[i + 1].startsWith("-")) {
-        flags[key] = args[i + 1];
-        i++;
-        continue;
-      }
-      flags[key] = true;
-      continue;
-    }
-    if (!arg.startsWith("-") || arg === "-") {
-      positionals.push(...args.slice(i));
-      break;
-    }
-  }
-  return { flags, positionals } as const;
-}
-
-function coerceBoolFlags(flags: Record<string, any>, keys: string[]) {
-  for (const key of keys) {
-    if (!(key in flags)) continue;
-    const v = flags[key];
-    if (typeof v === "boolean") continue;
-    if (typeof v === "string") {
-      const lowered = v.trim().toLowerCase();
-      flags[key] = !(lowered === "false" || lowered === "0" || lowered === "no");
-    } else {
-      flags[key] = Boolean(v);
-    }
-  }
 }
 
 type Task = {
@@ -1201,19 +1139,12 @@ function chunkStrings(values: string[], size: number) {
 
 async function main() {
   const argv = process.argv.slice(2);
-  if (argv.length === 0 || argv[0] === "help" || argv[0] === "-h" || argv[0] === "--help") {
-    printUsage(process.stdout);
-    process.exit(0);
-  }
   const program = new Command();
-  let ran = false;
   program
     .name("bitable-task")
     .description("Feishu Bitable task manager")
-    .helpOption(false)
-    .addHelpCommand(false)
-    .allowUnknownOption(true)
-    .passThroughOptions()
+    .showHelpAfterError()
+    .showSuggestionAfterError()
     .option("--log-json", "Output logs in JSON");
 
   const ensureGlobal = () => {
@@ -1222,33 +1153,22 @@ async function main() {
 
   program
     .command("fetch")
-    .allowUnknownOption(true)
-    .passThroughOptions()
-    .action((...args) => {
-      ran = true;
+    .description("Fetch tasks from Bitable")
+    .option("--task-url <url>", "Bitable task table URL")
+    .option("--app <value>", "App value for filter (required)")
+    .option("--scene <value>", "Scene value for filter (required)")
+    .option("--status <value>", "Task status filter (default: pending)")
+    .option("--date <value>", "Date preset: Today/Yesterday/Any")
+    .option("--limit <n>", "Max tasks to return (0 = no cap)")
+    .option("--page-size <n>", "Page size (max 500)")
+    .option("--max-pages <n>", "Max pages to fetch (0 = no cap)")
+    .option("--ignore-view", "Ignore view_id when searching (default: true)")
+    .option("--use-view", "Use view_id from URL")
+    .option("--view-id <id>", "Override view_id when searching")
+    .option("--jsonl", "Output JSONL (one task per line)")
+    .option("--raw", "Include raw fields in output")
+    .action(async (options) => {
       ensureGlobal();
-      const cmd = args[args.length - 1];
-      const parsed = parseFlags(cmd.args ?? []);
-      const flags = parsed.flags as any;
-      coerceBoolFlags(flags, ["ignore_view", "use_view", "jsonl", "raw"]);
-      if (flags.help) {
-        process.stdout.write("Usage:\n  bitable-task fetch [flags]\n\n");
-        process.stdout.write("Flags:\n");
-        process.stdout.write("  --task-url <url>        Bitable task table URL\n");
-        process.stdout.write("  --app <value>           App value for filter (required)\n");
-        process.stdout.write("  --scene <value>         Scene value for filter (required)\n");
-        process.stdout.write("  --status <value>        Task status filter (default: pending)\n");
-        process.stdout.write("  --date <value>          Date preset: Today/Yesterday/Any\n");
-        process.stdout.write("  --limit <n>             Max tasks to return (0 = no cap)\n");
-        process.stdout.write("  --page-size <n>         Page size (max 500)\n");
-        process.stdout.write("  --max-pages <n>         Max pages to fetch (0 = no cap)\n");
-        process.stdout.write("  --ignore-view           Ignore view_id when searching (default: true)\n");
-        process.stdout.write("  --use-view              Use view_id from URL\n");
-        process.stdout.write("  --view-id <id>          Override view_id when searching\n");
-        process.stdout.write("  --jsonl                 Output JSONL (one task per line)\n");
-        process.stdout.write("  --raw                   Include raw fields in output\n");
-        process.exit(0);
-      }
       const opts: any = {
         task_url: process.env.TASK_BITABLE_URL || "",
         status: "pending",
@@ -1256,8 +1176,19 @@ async function main() {
         page_size: 200,
         ignore_view: true,
       };
-      Object.assign(opts, flags);
-      if (flags.use_view) opts.ignore_view = false;
+      if (options.taskUrl) opts.task_url = options.taskUrl;
+      if (options.status) opts.status = options.status;
+      if (options.date) opts.date = options.date;
+      if (options.pageSize) opts.page_size = options.pageSize;
+      if (options.limit) opts.limit = options.limit;
+      if (options.maxPages) opts.max_pages = options.maxPages;
+      if (options.ignoreView) opts.ignore_view = true;
+      if (options.useView) opts.ignore_view = false;
+      if (options.viewId) opts.view_id = options.viewId;
+      if (options.jsonl) opts.jsonl = true;
+      if (options.raw) opts.raw = true;
+      if (options.app) opts.app = options.app;
+      if (options.scene) opts.scene = options.scene;
       if (!opts.app || !opts.scene) {
         errLogger.error("--app and --scene are required");
         process.exit(2);
@@ -1267,119 +1198,137 @@ async function main() {
 
   program
     .command("update")
-    .allowUnknownOption(true)
-    .passThroughOptions()
-    .action((...args) => {
-      ran = true;
+    .description("Update tasks in Bitable")
+    .option("--task-url <url>", "Bitable task table URL")
+    .option("--input <path>", "Input JSON/JSONL file (use - for stdin)")
+    .option("--task-id <id>", "Single task id to update")
+    .option("--biz-task-id <id>", "Single biz task id to update")
+    .option("--record-id <id>", "Single record id to update")
+    .option("--status <value>", "Status to set")
+    .option("--date <value>", "Date to set (string or epoch/ISO)")
+    .option("--device-serial <val>", "Dispatched device serial")
+    .option("--dispatched-at <val>", "Dispatch time (ms/seconds/ISO/now)")
+    .option("--start-at <val>", "Start time (ms/seconds/ISO)")
+    .option("--completed-at <val>", "Completion time (ms/seconds/ISO)")
+    .option("--end-at <val>", "End time (ms/seconds/ISO)")
+    .option("--elapsed-seconds <val>", "Elapsed seconds (int)")
+    .option("--items-collected <val>", "Items collected (int)")
+    .option("--logs <val>", "Logs path or identifier")
+    .option("--retry-count <val>", "Retry count (int)")
+    .option("--extra <json>", "Extra JSON string")
+    .option("--skip-status <csv>", "Skip updates when current status matches")
+    .option("--ignore-view", "Ignore view_id when searching (default: true)")
+    .option("--use-view", "Use view_id from URL")
+    .option("--view-id <id>", "Override view_id when searching")
+    .action(async (options) => {
       ensureGlobal();
-      const cmd = args[args.length - 1];
-      const parsed = parseFlags(cmd.args ?? []);
-      const flags = parsed.flags as any;
-      coerceBoolFlags(flags, ["ignore_view", "use_view", "jsonl", "raw"]);
-      if (flags.help) {
-        process.stdout.write("Usage:\n  bitable-task update [flags]\n\n");
-        process.stdout.write("Flags:\n");
-        process.stdout.write("  --task-url <url>        Bitable task table URL\n");
-        process.stdout.write("  --input <path>          Input JSON/JSONL file (use - for stdin)\n");
-        process.stdout.write("  --task-id <id>          Single task id to update\n");
-        process.stdout.write("  --biz-task-id <id>      Single biz task id to update\n");
-        process.stdout.write("  --record-id <id>        Single record id to update\n");
-        process.stdout.write("  --status <value>        Status to set\n");
-        process.stdout.write("  --date <value>          Date to set (string or epoch/ISO)\n");
-        process.stdout.write("  --device-serial <val>   Dispatched device serial\n");
-        process.stdout.write("  --dispatched-at <val>   Dispatch time (ms/seconds/ISO/now)\n");
-        process.stdout.write("  --start-at <val>        Start time (ms/seconds/ISO)\n");
-        process.stdout.write("  --completed-at <val>    Completion time (ms/seconds/ISO)\n");
-        process.stdout.write("  --end-at <val>          End time (ms/seconds/ISO)\n");
-        process.stdout.write("  --elapsed-seconds <val> Elapsed seconds (int)\n");
-        process.stdout.write("  --items-collected <val> Items collected (int)\n");
-        process.stdout.write("  --logs <val>            Logs path or identifier\n");
-        process.stdout.write("  --retry-count <val>     Retry count (int)\n");
-        process.stdout.write("  --extra <json>          Extra JSON string\n");
-        process.stdout.write("  --skip-status <csv>     Skip updates when current status matches\n");
-        process.stdout.write("  --ignore-view           Ignore view_id when searching (default: true)\n");
-        process.stdout.write("  --use-view              Use view_id from URL\n");
-        process.stdout.write("  --view-id <id>          Override view_id when searching\n");
-        process.exit(0);
-      }
       const opts: any = {
         task_url: process.env.TASK_BITABLE_URL || "",
         ignore_view: true,
       };
-      Object.assign(opts, flags);
-      if (flags.use_view) opts.ignore_view = false;
+      if (options.taskUrl) opts.task_url = options.taskUrl;
+      if (options.input) opts.input = options.input;
+      if (options.taskId) opts.task_id = options.taskId;
+      if (options.bizTaskId) opts.biz_task_id = options.bizTaskId;
+      if (options.recordId) opts.record_id = options.recordId;
+      if (options.status) opts.status = options.status;
+      if (options.date) opts.date = options.date;
+      if (options.deviceSerial) opts.device_serial = options.deviceSerial;
+      if (options.dispatchedAt) opts.dispatched_at = options.dispatchedAt;
+      if (options.startAt) opts.start_at = options.startAt;
+      if (options.completedAt) opts.completed_at = options.completedAt;
+      if (options.endAt) opts.end_at = options.endAt;
+      if (options.elapsedSeconds) opts.elapsed_seconds = options.elapsedSeconds;
+      if (options.itemsCollected) opts.items_collected = options.itemsCollected;
+      if (options.logs) opts.logs = options.logs;
+      if (options.retryCount) opts.retry_count = options.retryCount;
+      if (options.extra) opts.extra = options.extra;
+      if (options.skipStatus) opts.skip_status = options.skipStatus;
+      if (options.ignoreView) opts.ignore_view = true;
+      if (options.useView) opts.ignore_view = false;
+      if (options.viewId) opts.view_id = options.viewId;
       process.exit(await UpdateTasks(opts));
     });
 
   program
     .command("create")
-    .allowUnknownOption(true)
-    .passThroughOptions()
-    .action((...args) => {
-      ran = true;
+    .description("Create tasks in Bitable")
+    .option("--task-url <url>", "Bitable task table URL")
+    .option("--input <path>", "Input JSON/JSONL file (use - for stdin)")
+    .option("--biz-task-id <id>", "Biz task id to create")
+    .option("--parent-task-id <id>", "Parent task id")
+    .option("--app <value>", "App value")
+    .option("--scene <value>", "Scene value")
+    .option("--params <value>", "Task params")
+    .option("--item-id <value>", "Item id")
+    .option("--book-id <value>", "Book id")
+    .option("--url <value>", "URL")
+    .option("--user-id <value>", "User id")
+    .option("--user-name <value>", "User name")
+    .option("--date <value>", "Date value (string or epoch/ISO)")
+    .option("--status <value>", "Status")
+    .option("--device-serial <val>", "Dispatched device serial")
+    .option("--dispatched-device <val>", "Dispatched device (override device-serial)")
+    .option("--dispatched-at <val>", "Dispatch time (ms/seconds/ISO/now)")
+    .option("--start-at <val>", "Start time (ms/seconds/ISO)")
+    .option("--completed-at <val>", "Completion time (ms/seconds/ISO)")
+    .option("--end-at <val>", "End time (ms/seconds/ISO)")
+    .option("--elapsed-seconds <val>", "Elapsed seconds (int)")
+    .option("--items-collected <val>", "Items collected (int)")
+    .option("--logs <val>", "Logs path or identifier")
+    .option("--retry-count <val>", "Retry count (int)")
+    .option("--last-screenshot <val>", "Last screenshot reference")
+    .option("--group-id <val>", "Group id")
+    .option("--extra <json>", "Extra JSON string")
+    .option("--skip-existing <csv>", "Skip create when existing records match fields")
+    .option("--ignore-view", "Ignore view_id when searching (default: true)")
+    .option("--use-view", "Use view_id from URL")
+    .option("--view-id <id>", "Override view_id when searching")
+    .action(async (options) => {
       ensureGlobal();
-      const cmd = args[args.length - 1];
-      const parsed = parseFlags(cmd.args ?? []);
-      const flags = parsed.flags as any;
-      coerceBoolFlags(flags, ["ignore_view", "use_view", "jsonl", "raw"]);
-      if (flags.help) {
-        process.stdout.write("Usage:\n  bitable-task create [flags]\n\n");
-        process.stdout.write("Flags:\n");
-        process.stdout.write("  --task-url <url>        Bitable task table URL\n");
-        process.stdout.write("  --input <path>          Input JSON/JSONL file (use - for stdin)\n");
-        process.stdout.write("  --biz-task-id <id>      Biz task id to create\n");
-        process.stdout.write("  --parent-task-id <id>   Parent task id\n");
-        process.stdout.write("  --app <value>           App value\n");
-        process.stdout.write("  --scene <value>         Scene value\n");
-        process.stdout.write("  --params <value>        Task params\n");
-        process.stdout.write("  --item-id <value>       Item id\n");
-        process.stdout.write("  --book-id <value>       Book id\n");
-        process.stdout.write("  --url <value>           URL\n");
-        process.stdout.write("  --user-id <value>       User id\n");
-        process.stdout.write("  --user-name <value>     User name\n");
-        process.stdout.write("  --date <value>          Date value (string or epoch/ISO)\n");
-        process.stdout.write("  --status <value>        Status\n");
-        process.stdout.write("  --device-serial <val>   Dispatched device serial\n");
-        process.stdout.write("  --dispatched-device <v> Dispatched device (override device-serial)\n");
-        process.stdout.write("  --dispatched-at <val>   Dispatch time (ms/seconds/ISO/now)\n");
-        process.stdout.write("  --start-at <val>        Start time (ms/seconds/ISO)\n");
-        process.stdout.write("  --completed-at <val>    Completion time (ms/seconds/ISO)\n");
-        process.stdout.write("  --end-at <val>          End time (ms/seconds/ISO)\n");
-        process.stdout.write("  --elapsed-seconds <val> Elapsed seconds (int)\n");
-        process.stdout.write("  --items-collected <val> Items collected (int)\n");
-        process.stdout.write("  --logs <val>            Logs path or identifier\n");
-        process.stdout.write("  --retry-count <val>     Retry count (int)\n");
-        process.stdout.write("  --last-screenshot <val> Last screenshot reference\n");
-        process.stdout.write("  --group-id <val>        Group id\n");
-        process.stdout.write("  --extra <json>          Extra JSON string\n");
-        process.stdout.write("  --skip-existing <csv>   Skip create when existing records match fields\n");
-        process.stdout.write("  --ignore-view           Ignore view_id when searching (default: true)\n");
-        process.stdout.write("  --use-view              Use view_id from URL\n");
-        process.stdout.write("  --view-id <id>          Override view_id when searching\n");
-        process.exit(0);
-      }
       const opts: any = {
         task_url: process.env.TASK_BITABLE_URL || "",
       };
-      Object.assign(opts, flags);
-      if (flags.use_view) opts.ignore_view = false;
+      if (options.taskUrl) opts.task_url = options.taskUrl;
+      if (options.input) opts.input = options.input;
+      if (options.bizTaskId) opts.biz_task_id = options.bizTaskId;
+      if (options.parentTaskId) opts.parent_task_id = options.parentTaskId;
+      if (options.app) opts.app = options.app;
+      if (options.scene) opts.scene = options.scene;
+      if (options.params) opts.params = options.params;
+      if (options.itemId) opts.item_id = options.itemId;
+      if (options.bookId) opts.book_id = options.bookId;
+      if (options.url) opts.url = options.url;
+      if (options.userId) opts.user_id = options.userId;
+      if (options.userName) opts.user_name = options.userName;
+      if (options.date) opts.date = options.date;
+      if (options.status) opts.status = options.status;
+      if (options.deviceSerial) opts.device_serial = options.deviceSerial;
+      if (options.dispatchedDevice) opts.dispatched_device = options.dispatchedDevice;
+      if (options.dispatchedAt) opts.dispatched_at = options.dispatchedAt;
+      if (options.startAt) opts.start_at = options.startAt;
+      if (options.completedAt) opts.completed_at = options.completedAt;
+      if (options.endAt) opts.end_at = options.endAt;
+      if (options.elapsedSeconds) opts.elapsed_seconds = options.elapsedSeconds;
+      if (options.itemsCollected) opts.items_collected = options.itemsCollected;
+      if (options.logs) opts.logs = options.logs;
+      if (options.retryCount) opts.retry_count = options.retryCount;
+      if (options.lastScreenshot) opts.last_screenshot = options.lastScreenshot;
+      if (options.groupId) opts.group_id = options.groupId;
+      if (options.extra) opts.extra = options.extra;
+      if (options.skipExisting) opts.skip_existing = options.skipExisting;
+      if (options.ignoreView) opts.ignore_view = true;
+      if (options.useView) opts.ignore_view = false;
+      if (options.viewId) opts.view_id = options.viewId;
       process.exit(await CreateTasks(opts));
     });
 
-  program.on("command:*", (operands) => {
-    ensureGlobal();
-    errLogger.error("unknown command", { command: operands[0] });
-    printUsage(process.stdout);
-    process.exit(2);
-  });
-
-  await program.parseAsync(process.argv);
-  if (!ran) {
-    printUsage(process.stdout);
+  if (argv.length === 0) {
+    program.outputHelp();
     process.exit(0);
   }
+  await program.parseAsync(process.argv);
 }
-
 main().catch((err) => {
   errLogger.error("unhandled error", { err: err?.message || String(err) });
   process.exit(1);
