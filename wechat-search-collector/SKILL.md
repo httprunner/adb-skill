@@ -1,14 +1,17 @@
 ---
 name: wechat-search-collector
-description: 微信视频号搜索与结果遍历的多端自动化采集流程（Android/iOS/HarmonyOS/HDC），支持综合页搜索、个人页搜索与全量搜索结果遍历。
+description: 微信视频号搜索与结果遍历的自动化采集流程（Android），支持综合页搜索、个人页搜索与全量搜索结果遍历。
 ---
 
 # 微信视频号搜索
 
 ## 概述
-本技能覆盖同一产品在 Android / iOS / HarmonyOS 等多端界面一致场景的搜索与遍历流程。执行层需根据设备类型选择对应驱动：Android 使用 `android-adb-go`，HarmonyOS 使用 `harmony-hdc`，iOS 使用对应自动化工具链（如 XCUITest/Appium）。始终使用 `ai-vision` 从截图中定位 UI 元素，任何步骤都不要使用 `dump-ui` 做元素发现。为避免 Go 模块依赖问题，所有命令需在各自 skill 目录内执行：`android-adb-go` 的命令在其目录运行，`ai-vision` 的命令在其目录运行。截图统一写入 `~/.eval/screenshots/`，文件名带时间戳避免覆盖。本文示例以 Android/ADB 命令为主，其他端按工具链替换执行命令。
+本技能覆盖微信视频号在 Android 端的关键词搜索与结果遍历流程。
 
-具体命令已抽离到 `references/commands.md`，流程中只描述关键步骤。ai-vision 输出为已转换的绝对像素坐标，可直接用于 adb 操作。
+- 执行层需使用 `android-adb-go` 实现 Android 设备管理和 UI 操作，使用 `ai-vision` 从截图中定位 UI 元素并推理下一步动作，不要使用 `dump-ui` 做元素发现。当前 `ai-vision` 实现会输出已转换的绝对像素坐标，可直接用于 adb 操作。
+- 为避免 Go 模块依赖问题，所有命令需在各自 skill 目录内执行：`android-adb-go` 的命令在其目录运行，`ai-vision` 的命令在其目录运行。
+- 截图统一写入 `~/.eval/screenshots/`，文件名带时间戳避免覆盖。
+- 具体命令已抽离到 `references/commands.md`，流程中只描述关键步骤。
 
 ## 综合页搜索流程
 适用于“在视频号综合页搜索单个或多个关键词并遍历结果”的需求。
