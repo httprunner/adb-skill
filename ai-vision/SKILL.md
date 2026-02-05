@@ -47,14 +47,14 @@ npx tsx scripts/ai_vision.ts query \
 ```bash
 npx tsx scripts/ai_vision.ts assert \
   --screenshot ~/.eval/screenshots/ui_YYYYMMDD_HHMMSS.png \
-  --assertion "当前页面包含搜索框"
+  --prompt "当前页面包含搜索框"
 ```
 
 ### plan-next (single-step planning)
 ```bash
 npx tsx scripts/ai_vision.ts plan-next \
   --screenshot ~/.eval/screenshots/ui_YYYYMMDD_HHMMSS.png \
-  --instruction "点击放大镜图标进入搜索页"
+  --prompt "点击放大镜图标进入搜索页"
 ```
 
 ## Output Notes

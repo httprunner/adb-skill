@@ -163,7 +163,8 @@ async function callModel(
     logger.debug("model raw response", { data: raw });
     const text = extractResponseText(raw);
     const status = extractResponseStatus(raw);
-    return { text, status };
+    const summary = extractResponseSummary(raw);
+    return { text, status, summary };
   } finally {
     clearTimeout(timer);
   }
@@ -196,6 +197,27 @@ function extractResponseStatus(raw: string) {
   try {
     const parsed = JSON.parse(raw);
     return typeof parsed.status === "string" ? parsed.status : "";
+  } catch {
+    return "";
+  }
+}
+
+function extractResponseSummary(raw: string) {
+  try {
+    const parsed = JSON.parse(raw);
+    const output = parsed.output as Array<any> | undefined;
+    if (!output) return "";
+    const parts: string[] = [];
+    for (const item of output) {
+      const summary = item?.summary as Array<any> | undefined;
+      if (!summary) continue;
+      for (const s of summary) {
+        if (s?.type !== "summary_text") continue;
+        const t = String(s?.text ?? "").trim();
+        if (t) parts.push(t);
+      }
+    }
+    return parts.join("\n").trim();
   } catch {
     return "";
   }
@@ -535,10 +557,12 @@ async function runQuery(options: {
   }
   let content: string;
   let status: string;
+  let summary = "";
   try {
     const res = await callModel(cfg, defaultQueryPrompt, prompt, img.b64);
     content = res.text;
     status = res.status;
+    summary = res.summary || "";
   } catch (err: any) {
     errLogger.error("call model failed", { err: err?.message || String(err) });
     return 1;
@@ -548,23 +572,23 @@ async function runQuery(options: {
     result = parseStructuredResponse(content);
   } catch {
     result.content = content;
-    result.thought = "Failed to parse structured response";
   }
+  if (!result.thought && summary) result.thought = summary;
   normalizeQueryResult(result, img.size, content);
   return printJSON({ size: img.size, result, model: cfg.Model, status });
 }
 
 async function runAssert(options: {
   screenshot?: string;
-  assertion?: string;
+  prompt?: string;
   model?: string;
   baseUrl?: string;
   apiKey?: string;
 }) {
   const screenshot = String(options.screenshot || "");
-  const assertion = String(options.assertion || "");
+  const assertion = String(options.prompt || "");
   if (!screenshot || !assertion) {
-    errLogger.error("assert requires --screenshot and --assertion");
+    errLogger.error("assert requires --screenshot and --prompt");
     return 2;
   }
   let cfg;
@@ -583,10 +607,12 @@ async function runAssert(options: {
   }
   let content: string;
   let status: string;
+  let summary = "";
   try {
     const res = await callModel(cfg, defaultAssertionPrompt, assertion, img.b64);
     content = res.text;
     status = res.status;
+    summary = res.summary || "";
   } catch (err: any) {
     errLogger.error("call model failed", { err: err?.message || String(err) });
     return 1;
@@ -596,24 +622,24 @@ async function runAssert(options: {
     result = parseStructuredResponse(content);
   } catch {
     result.content = content;
-    result.thought = "Failed to parse structured response";
   }
+  if (!result.thought && summary) result.thought = summary;
   return printJSON({ size: img.size, result, model: cfg.Model, status });
 }
 
 async function runPlanNext(options: {
   screenshot?: string;
-  instruction?: string;
+  prompt?: string;
   history?: string;
   model?: string;
   baseUrl?: string;
   apiKey?: string;
 }) {
   const screenshot = String(options.screenshot || "");
-  const instruction = String(options.instruction || "").trim();
+  const instruction = String(options.prompt || "").trim();
   const history = String(options.history || "").trim();
   if (!screenshot || !instruction) {
-    errLogger.error("plan-next requires --screenshot and --instruction");
+    errLogger.error("plan-next requires --screenshot and --prompt");
     return 2;
   }
   let cfg;
@@ -634,10 +660,12 @@ async function runPlanNext(options: {
   if (history) userPrompt = `Instruction:\n${instruction}\n\nHistory:\n${history}`;
   let content: string;
   let status: string;
+  let summary = "";
   try {
     const res = await callModel(cfg, doubaoThinkingVisionPrompt, userPrompt, img.b64);
     content = res.text;
     status = res.status;
+    summary = res.summary || "";
   } catch (err: any) {
     errLogger.error("call model failed", { err: err?.message || String(err) });
     return 1;
@@ -649,6 +677,7 @@ async function runPlanNext(options: {
     errLogger.error("parse JSON planning failed", { err: err?.message || String(err) });
     return 1;
   }
+  if (!result?.thought && summary) result.thought = summary;
   result.status = status;
   return printJSON(result);
 }
@@ -680,7 +709,7 @@ async function main() {
     .command("assert")
     .description("Assert a condition against a screenshot")
     .requiredOption("--screenshot <file>", "screenshot path (png/jpg)")
-    .requiredOption("--assertion <text>", "assertion text")
+    .requiredOption("--prompt <text>", "assertion text")
     .option("--model <name>", "model name")
     .option("--base-url <url>", "override base url")
     .option("--api-key <key>", "override api key")
@@ -693,7 +722,7 @@ async function main() {
     .command("plan-next")
     .description("Plan a single next action based on a screenshot")
     .requiredOption("--screenshot <file>", "screenshot path (png/jpg)")
-    .requiredOption("--instruction <text>", "instruction text (for action)")
+    .requiredOption("--prompt <text>", "instruction text (for action)")
     .option("--history <text>", "optional action history text")
     .option("--model <name>", "model name")
     .option("--base-url <url>", "override base url")
