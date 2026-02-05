@@ -218,7 +218,14 @@ async function FetchTasksOnce(opts: any): Promise<FetchResult | { err: true; cod
     return { err: true, code: 2 };
   }
   const fields = LoadTaskFieldsFromEnv();
-  const filterObj = buildFilter(fields, opts.app || "", opts.scene || "", opts.status || "", opts.date || "");
+  let filterObj = buildFilter(fields, opts.app || "", opts.scene || "", opts.status || "", opts.date || "");
+  if (opts.task_id != null && String(opts.task_id).trim()) {
+    const [taskID, ok] = CoerceInt(opts.task_id);
+    if (ok && taskID > 0) filterObj = buildIDFilter(fields["TaskID"], [String(taskID)]);
+  } else if (opts.biz_task_id != null && String(opts.biz_task_id).trim()) {
+    const bizID = String(opts.biz_task_id || "").trim();
+    if (bizID) filterObj = buildIDFilter(fields["BizTaskID"], [bizID]);
+  }
   let token: string;
   try {
     token = await GetTenantAccessToken(baseURL, appID, appSecret);
@@ -708,7 +715,15 @@ async function UpdateTasks(opts: any) {
   for (const upd of updates) {
     const recordID = resolveUpdateRecordID(upd, resolvedTask, resolvedBiz);
     if (!recordID) {
-      errorsList.push("missing record_id for update");
+      const taskID = BitableValueToString(upd.task_id).trim();
+      const bizID = BitableValueToString(upd.biz_task_id).trim();
+      if (taskID) {
+        errorsList.push(`task-id ${taskID} not found`);
+      } else if (bizID) {
+        errorsList.push(`biz-task-id ${bizID} not found`);
+      } else {
+        errorsList.push("missing record_id for update");
+      }
       continue;
     }
     if (Object.keys(skipStatuses).length) {
@@ -1220,6 +1235,8 @@ async function main() {
     .command("fetch")
     .description("Fetch tasks from Bitable")
     .option("--task-url <url>", "Bitable task table URL")
+    .option("--task-id <id>", "Fetch by task id")
+    .option("--biz-task-id <id>", "Fetch by biz task id")
     .option("--app <value>", "App value for filter (required)")
     .option("--scene <value>", "Scene value for filter (required)")
     .option("--status <value>", "Task status filter; supports comma-separated priority list (default: pending)")
@@ -1254,9 +1271,13 @@ async function main() {
       if (options.raw) opts.raw = true;
       if (options.app) opts.app = options.app;
       if (options.scene) opts.scene = options.scene;
+      if (options.taskId) opts.task_id = options.taskId;
+      if (options.bizTaskId) opts.biz_task_id = options.bizTaskId;
       if (!opts.app || !opts.scene) {
-        errLogger.error("--app and --scene are required");
-        process.exit(2);
+        if (!opts.task_id && !opts.biz_task_id) {
+          errLogger.error("--app and --scene are required (or use --task-id/--biz-task-id)");
+          process.exit(2);
+        }
       }
       process.exit(await FetchTasks(opts));
     });

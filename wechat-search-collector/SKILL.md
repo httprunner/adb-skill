@@ -15,9 +15,10 @@ description: 微信视频号搜索与结果遍历的自动化采集流程（Andr
 - 如需从飞书多维表格拉取搜索任务，使用 `feishu-bitable-task-manager` 获取任务参数后再进入对应流程。
 
 ## 任务拉取（Feishu Bitable）
-当需要“从任务表获取搜索任务并执行”时，先用 `feishu-bitable-task-manager` 拉取任务，再将任务字段映射到本技能的参数。
-每次只拉取并执行 1 条任务（`--limit 1`），状态优先级使用 `--status pending,failed`。
-具体命令示例见 `references/commands.md`。
+
+- 当需要“从任务表获取搜索任务并执行”时，先用 `feishu-bitable-task-manager` 拉取任务，将任务字段映射到本技能的参数。
+- 每次只拉取并执行 1 条任务（`--limit 1`），状态优先级使用 `--status pending,failed`。
+- 任务开始执行前通过 `feishu-bitable-task-manager` 更新该 `TaskID` 的 `Status`、`DispatchedDevice`、`DispatchedAt`、`StartAt`。
 
 ### 综合页搜索任务
 - 过滤条件：`Scene=综合页搜索`、`App=com.tencent.mm`、`Date=Today`、`Status=pending/failed`。
@@ -63,8 +64,9 @@ description: 微信视频号搜索与结果遍历的自动化采集流程（Andr
 - 频率要求：在结果页滚动过程中，每滑动 5 次检测一次是否已滑动到底。
 - 确认触底后：点击搜索框确保输入框激活 -> 清空 -> 输入下一个关键词 -> 触发搜索，直到完成所有关键词的遍历。
 
-### 7. 任务完成后回到桌面
+### 7. 任务结束后的收尾逻辑
 - 所有关键词遍历完成后，使用 `android-adb` 的 `back-home` 命令返回手机桌面。
+- 基于任务执行结果调用 `feishu-bitable-task-manager` 更新该 `TaskID` 的 `Status` 和 `EndAt`
 
 ## 个人页搜索流程
 适用于“先进入某账号个人页，再在个人页内检索多个关键词并遍历结果”的需求。
@@ -97,9 +99,11 @@ description: 微信视频号搜索与结果遍历的自动化采集流程（Andr
 - 频率要求：在结果页滚动过程中，每滑动 5 次检测一次是否已滑动到底。
 - 每个关键词搜索前确认仍在该账号个人页；若误退出则重进个人页后继续。
 
-### 7. 任务完成后回到桌面
+### 7. 任务结束后的收尾逻辑
 - 所有关键词遍历完成后，使用 `android-adb` 的 `back-home` 命令返回手机桌面。
+- 基于任务执行结果调用 `feishu-bitable-task-manager` 更新该 `TaskID` 的 `Status` 和 `EndAt`
 
 ## 备注与排障
 - 点击不准：重新截图，让 ai-vision 提供更精确坐标（不要改用 `dump-ui`）。
 - 异常流程（弹窗遮挡或步骤卡住）：先识别弹窗并关闭，再继续原步骤。处理命令见 `references/commands.md`。
+- 任务超时限制：若单个任务执行时长超过 30 分钟，则终止执行，任务状态更新为 failed。

@@ -11,6 +11,10 @@ Build the filter with these columns:
 - `Date` is `is <preset>` where preset is `Today`/`Yesterday`/`Any`
   - `Any` skips the date constraint.
 
+Direct fetch overrides:
+- If `--task-id` is provided, fetch by `TaskID` only (no other params required).
+- If `--biz-task-id` is provided, fetch by `BizTaskID` only (no other params required).
+
 Relevant date presets:
 - `TaskDateToday = "Today"`
 - `TaskDateYesterday = "Yesterday"`
@@ -22,6 +26,7 @@ Relevant date presets:
 - `Limit` caps the total rows returned.
 - `PageToken` + `MaxPages = 1` enables incremental scanning.
 - Use `has_more` + `page_token` to continue scans.
+- Use `--raw` when you need `record_id` or original field payloads for debugging.
 
 ## Validation rules (decoded tasks)
 

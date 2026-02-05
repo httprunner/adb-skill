@@ -5,6 +5,7 @@
 - 所有设备操作命令默认带 `-s SERIAL`。
 - 所有 `android-adb` 命令在 `android-adb` 目录执行。
 - 所有 `ai-vision` 命令在 `ai-vision` 目录执行。
+- 所有 `feishu-bitable-task-manager` 命令在 `feishu-bitable-task-manager` 目录执行。
 - 截图与相关产物输出目录由 `TASK_ID` 控制：若指定 `TASK_ID` 则写入 `~/.eval/<TASK_ID>/`，未指定则写入 `~/.eval/debug/`。
 - `ai-vision` 会返回已转换的绝对像素坐标，直接用于 `adb_helpers.ts` 操作。
 
@@ -63,21 +64,31 @@
   `export FEISHU_APP_ID=...`
   `export FEISHU_APP_SECRET=...`
   `export TASK_BITABLE_URL="https://.../base/APP_TOKEN?table=TABLE_ID"`
-  `npx tsx /Users/debugtalk/MyProjects/HttpRunner-dev/skills/feishu-bitable-task-manager/scripts/bitable_task.ts fetch --app com.tencent.mm --scene 综合页搜索 --status pending,failed --date Today --limit 1`
+  `npx tsx scripts/bitable_task.ts fetch --app com.tencent.mm --scene 综合页搜索 --status pending,failed --date Today --limit 1`
 - 映射参数：
   `TaskID -> TASK_ID`
   `Params -> KEYWORDS`（逗号或换行拆分）
+ - 拉取后更新状态为 running：
+  `npx tsx scripts/bitable_task.ts update --task-id TASK_ID --status running --device-serial SERIAL --dispatched-at now --start-at now`
 
 ### 个人页搜索
 - 拉取任务：
   `export FEISHU_APP_ID=...`
   `export FEISHU_APP_SECRET=...`
   `export TASK_BITABLE_URL="https://.../base/APP_TOKEN?table=TABLE_ID"`
-  `npx tsx /Users/debugtalk/MyProjects/HttpRunner-dev/skills/feishu-bitable-task-manager/scripts/bitable_task.ts fetch --app com.tencent.mm --scene 个人页搜索 --status pending,failed --date Today --limit 1`
+  `npx tsx scripts/bitable_task.ts fetch --app com.tencent.mm --scene 个人页搜索 --status pending,failed --date Today --limit 1`
 - 映射参数：
   `TaskID -> TASK_ID`
   `UserName -> ACCOUNT_NAME`
   `Params -> KEYWORDS`（逗号或换行拆分）
+ - 拉取后更新状态为 running：
+  `npx tsx scripts/bitable_task.ts update --task-id TASK_ID --status running --device-serial SERIAL --dispatched-at now --start-at now`
+
+## Feishu 任务完成收尾
+- 任务成功完成：
+  `npx tsx scripts/bitable_task.ts update --task-id TASK_ID --status success --completed-at now`
+- 任务失败/中断：
+  `npx tsx scripts/bitable_task.ts update --task-id TASK_ID --status failed --completed-at now`
 
 ## 弹窗处理
 - 截图后让 ai-vision 识别关闭按钮（优先关闭或取消）：

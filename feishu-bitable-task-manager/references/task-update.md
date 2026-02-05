@@ -7,6 +7,7 @@ Use these behaviors when reporting task status updates to the task table.
 - Updates are applied by `record_id`.
 - If only `TaskID` is available, resolve `record_id` by searching the task table where `TaskID is <id>`.
 - If only `BizTaskID` is available, resolve `record_id` by searching the task table where `BizTaskID is <id>`.
+- If no matching row exists, the CLI reports `task-id <value> not found` or `biz-task-id <value> not found`.
 - Batch updates should be grouped into `records/batch_update` with up to 500 records per request.
 
 ## Update fields

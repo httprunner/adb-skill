@@ -18,7 +18,8 @@ Follow the task table conventions when pulling and updating tasks in Feishu Bita
 - If the URL is wiki-based, call `wiki/v2/spaces/get_node` to resolve the app token.
 
 3) Build table filters (fetch/resolve paths).
-- Always filter by `App`, `Scene`, `Status`, and `Date` presets.
+- When not fetching by ID, filter by `App`, `Scene`, `Status`, and `Date` presets.
+- If a specific `TaskID` or `BizTaskID` is provided, fetch directly by that ID (no `App`/`Scene` required).
 - Date presets are **literal strings**: `Today`, `Yesterday`, `Any`.
 - For explicit dates (`YYYY-MM-DD`), use `ExactDate` filter payload when the table Date column is a datetime type. If the column is plain text, use the literal date string.
 - Default status is `pending` when omitted.
@@ -70,7 +71,10 @@ export TASK_BITABLE_URL="https://.../base/APP_TOKEN?table=TABLE_ID&view=VIEW_ID"
 npx tsx scripts/bitable_task.ts fetch --app com.smile.gifmaker --scene 综合页搜索 --status pending --date Today --limit 10
 npx tsx scripts/bitable_task.ts fetch --app com.smile.gifmaker --scene 综合页搜索 --status pending,failed --date Today --limit 10
 npx tsx scripts/bitable_task.ts fetch --app com.smile.gifmaker --scene 综合页搜索 --status pending --date 2026-02-05 --limit 10
+npx tsx scripts/bitable_task.ts fetch --task-id 1326 --raw
+npx tsx scripts/bitable_task.ts fetch --biz-task-id ext-20240101-001 --raw
 ```
+Use `--raw` when you need the `record_id` for follow-up updates.
 
 ```bash
 npx tsx scripts/bitable_task.ts update \
