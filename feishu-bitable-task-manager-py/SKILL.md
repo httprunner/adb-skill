@@ -1,9 +1,9 @@
 ---
-name: feishu-bitable-task-manager-ts
+name: feishu-bitable-task-manager-py
 description: Manage tasks in Feishu Bitable (multi-dimensional table): fetch, update, and create flows using a fixed schema, filters, pagination, and status update rules. Use when building or running task pullers/reporters that must match a specific task status table and its field mapping, status presets, and date presets.
 ---
 
-# Feishu Bitable Task Manager (TypeScript)
+# Feishu Bitable Task Manager
 
 Follow the task table conventions when pulling and updating tasks in Feishu Bitable.
 
@@ -17,7 +17,7 @@ Follow the task table conventions when pulling and updating tasks in Feishu Bita
 - Parse the Bitable URL to get `app_token`/`wiki_token`, `table_id`, and optional `view_id`.
 - If the URL is wiki-based, call `wiki/v2/spaces/get_node` to resolve the app token.
 
-3) Build table filters (fetch/resolve paths).
+3) Build table filters.
 - Always filter by `App`, `Scene`, `Status`, and `Date` presets.
 - Date presets are **literal strings**: `Today`, `Yesterday`, `Any`.
 - Default status is `pending` when omitted.
@@ -25,30 +25,21 @@ Follow the task table conventions when pulling and updating tasks in Feishu Bita
 4) Call Feishu Bitable search.
 - `POST /open-apis/bitable/v1/apps/{app_token}/tables/{table_id}/records/search`
 - Use `page_size` + `page_token` for pagination.
-- Respect `view_id` only when explicitly enabled (`--use-view`); default ignores view.
+- Respect `view_id` unless `ignore_view` is true.
 
 5) Validate decoded tasks.
 - Keep only rows with `TaskID != 0` and at least one of `Params`, `ItemID`, `BookID`, `URL`, `UserID`, `UserName`.
 
 6) Update task status/metadata.
-- Resolve `record_id` from `TaskID` or `BizTaskID` when needed.
+- Resolve record_id from `TaskID` or `BizTaskID` when needed.
 - Use `records/batch_update` for multiple updates, `records/{record_id}` for single updates.
 - Apply status + timing + metrics updates using the task table field mapping.
-- For JSONL ingestion, update any fields whose keys match column names, and map `CDNURL`/`cdn_url` to `Extra`.
+- For JSONL ingestion, update any fields whose keys match column names, and map `CDNURL` to `Extra`.
 - Use `--skip-status` to skip updates for tasks already in a given status (comma-separated).
 
 7) Create tasks.
 - Use `records/batch_create` for multiple tasks, `records` for single create.
-- Accept JSON/JSONL input (same key conventions as update); map `CDNURL`/`cdn_url` to `Extra`.
-- Use `--skip-existing <fields>` to skip creation when existing records match on the given fields (all must match).
-
-## Run (TypeScript)
-
-Use `npx tsx` so you can execute without building a binary:
-
-```bash
-npx tsx scripts/bitable_task.ts <subcommand> [flags]
-```
+- Accept JSON/JSONL input (same key conventions as update); map `CDNURL` to `Extra`.
 
 ## Examples
 
@@ -56,11 +47,11 @@ npx tsx scripts/bitable_task.ts <subcommand> [flags]
 export FEISHU_APP_ID=...
 export FEISHU_APP_SECRET=...
 export TASK_BITABLE_URL="https://.../base/APP_TOKEN?table=TABLE_ID&view=VIEW_ID"
-npx tsx scripts/bitable_task.ts fetch --app com.smile.gifmaker --scene 综合页搜索 --status pending --date Today --limit 10
+python scripts/fetch_tasks.py --app com.smile.gifmaker --scene 综合页搜索 --status pending --date Today --limit 10
 ```
 
 ```bash
-npx tsx scripts/bitable_task.ts update \
+python scripts/update_tasks.py \
   --task-id 180413 \
   --status running \
   --device-serial 1fa20bb \
@@ -70,7 +61,7 @@ npx tsx scripts/bitable_task.ts update \
 Update single task by BizTaskID:
 
 ```bash
-npx tsx scripts/bitable_task.ts update \
+python scripts/update_tasks.py \
   --biz-task-id ext-20240101-001 \
   --status success \
   --completed-at now
@@ -79,13 +70,14 @@ npx tsx scripts/bitable_task.ts update \
 Update from JSONL output (per-line task updates):
 
 ```bash
-npx tsx scripts/bitable_task.ts update --input output.jsonl
+python scripts/update_tasks.py \
+  --input output.jsonl
 ```
 
 Update from JSONL with CLI defaults for missing fields:
 
 ```bash
-npx tsx scripts/bitable_task.ts update \
+python scripts/update_tasks.py \
   --input tasks.jsonl \
   --status ready \
   --date 2026-01-27
@@ -94,7 +86,7 @@ npx tsx scripts/bitable_task.ts update \
 Create tasks from JSONL with defaults:
 
 ```bash
-npx tsx scripts/bitable_task.ts create \
+python scripts/create_tasks.py \
   --input tasks.jsonl \
   --app com.smile.gifmaker \
   --scene 单个链接采集 \
@@ -105,7 +97,7 @@ npx tsx scripts/bitable_task.ts create \
 Create from JSONL and skip when BizTaskID already exists:
 
 ```bash
-npx tsx scripts/bitable_task.ts create \
+python3 scripts/create_tasks.py \
   --input tasks.jsonl \
   --app com.smile.gifmaker \
   --scene 单个链接采集 \
@@ -117,7 +109,7 @@ npx tsx scripts/bitable_task.ts create \
 Create from JSONL and skip when both BookID and UserID match existing records:
 
 ```bash
-npx tsx scripts/bitable_task.ts create \
+python scripts/create_tasks.py \
   --input tasks.jsonl \
   --skip-existing BookID,UserID
 ```
@@ -125,7 +117,7 @@ npx tsx scripts/bitable_task.ts create \
 Create a single task with explicit fields:
 
 ```bash
-npx tsx scripts/bitable_task.ts create \
+python scripts/create_tasks.py \
   --biz-task-id GYS2601290001 \
   --app com.smile.gifmaker \
   --scene 单个链接采集 \
@@ -142,5 +134,6 @@ npx tsx scripts/bitable_task.ts create \
 - Read `references/task-update.md` for status updates, timing fields, and batch update rules.
 - Read `references/task-create.md` for create payload rules and batch create behavior.
 - Read `references/feishu-integration.md` for Feishu API endpoints and request/response payloads.
-- `scripts/bitable_task.ts`: single CLI entrypoint (`fetch`/`update`/`create`).
-- `scripts/bitable_common.ts`: Feishu OpenAPI HTTP + token/wiki helpers + value/timestamp coercion + env field mapping.
+- `scripts/fetch_tasks.py`: HTTP-based Python implementation that hits `/records/search` and decodes tasks (including wiki URL support).
+- `scripts/update_tasks.py`: HTTP-based Python implementation that updates task rows via `/records/batch_update` or `/records/{record_id}`.
+- `scripts/create_tasks.py`: HTTP-based Python implementation that creates task rows via `/records/batch_create` or `/records`.

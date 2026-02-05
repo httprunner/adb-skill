@@ -1,77 +1,78 @@
-# ADB reference
+# ADB reference (android-adb-go)
 
-## Setup and selection
+## ADB server
 
-- List devices: `adb devices -l`
-- Target a device: `adb -s <device_id> <command>`
-- Restart server:
-  - `adb kill-server`
-  - `adb start-server`
+- Start server:
+  - `npx tsx scripts/adb_helpers.ts start-server`
+- Kill server:
+  - `npx tsx scripts/adb_helpers.ts kill-server`
+
+## Device discovery and selection
+
+- List devices and get serial:
+  - `npx tsx scripts/adb_helpers.ts devices`
+- Target a device:
+  - `npx tsx scripts/adb_helpers.ts -s SERIAL <command>`
 
 ## Connection (Wi-Fi)
 
-- Enable tcpip (USB required): `adb -s <device_id> tcpip 5555`
+- Enable tcpip (USB required):
+  - `npx tsx scripts/adb_helpers.ts -s SERIAL enable-tcpip [port]`
 - Get device IP:
-  - `adb -s <device_id> shell ip route`
-  - `adb -s <device_id> shell ip addr show wlan0`
-- Connect: `adb connect <ip>:5555`
+  - `npx tsx scripts/adb_helpers.ts -s SERIAL get-ip`
+- Connect:
+  - `npx tsx scripts/adb_helpers.ts connect <ip>:5555`
 - Disconnect:
-  - `adb disconnect <ip>:5555`
-  - `adb disconnect`
+  - `npx tsx scripts/adb_helpers.ts disconnect [ip]:5555`
 
 ## Device info
 
-- Current activity/window focus:
-  - `adb -s <device_id> shell dumpsys window | rg -n "mCurrentFocus|mFocusedApp"`
-- Screen size: `adb -s <device_id> shell wm size`
-- Screen density: `adb -s <device_id> shell wm density`
+- Screen size:
+  - `npx tsx scripts/adb_helpers.ts -s SERIAL wm-size`
+- Current foreground app:
+  - `npx tsx scripts/adb_helpers.ts -s SERIAL get-current-app`
 
 ## App control
 
-- Launch app (monkey):
-  - `adb -s <device_id> shell monkey -p <package> -c android.intent.category.LAUNCHER 1`
-- Force-stop app: `adb -s <device_id> shell am force-stop <package>`
+- Check app installed (replace with your package):
+  - `npx tsx scripts/adb_helpers.ts -s SERIAL shell pm list packages | rg -n "<package>"`
+- Launch app:
+  - By package: `npx tsx scripts/adb_helpers.ts -s SERIAL launch <package>`
+  - By activity: `npx tsx scripts/adb_helpers.ts -s SERIAL launch <package>/<activity>`
+  - By schema/URI: `npx tsx scripts/adb_helpers.ts -s SERIAL launch <schema://path>`
+- Stop app (force-stop):
+  - `npx tsx scripts/adb_helpers.ts -s SERIAL force-stop <package>`
 
-## Input
+## Input actions
 
-- Tap: `adb -s <device_id> shell input tap <x> <y>`
+- Tap:
+  - `npx tsx scripts/adb_helpers.ts -s SERIAL tap X Y`
+- Double tap:
+  - `npx tsx scripts/adb_helpers.ts -s SERIAL double-tap X Y`
 - Long press:
-  - `adb -s <device_id> shell input swipe <x> <y> <x> <y> <duration_ms>`
+  - `npx tsx scripts/adb_helpers.ts -s SERIAL long-press X Y [--duration-ms N]`
 - Swipe:
-  - `adb -s <device_id> shell input swipe <x1> <y1> <x2> <y2> <duration_ms>`
-- Key events:
-  - Back: `adb -s <device_id> shell input keyevent 4`
-  - Home: `adb -s <device_id> shell input keyevent KEYCODE_HOME`
-  - Enter: `adb -s <device_id> shell input keyevent 66`
+  - `npx tsx scripts/adb_helpers.ts -s SERIAL swipe X1 Y1 X2 Y2 [--duration-ms N]`
+- Keyevent (examples):
+  - Back: `npx tsx scripts/adb_helpers.ts -s SERIAL keyevent KEYCODE_BACK`
+  - Home: `npx tsx scripts/adb_helpers.ts -s SERIAL keyevent KEYCODE_HOME`
+  - Enter: `npx tsx scripts/adb_helpers.ts -s SERIAL keyevent KEYCODE_ENTER`
+- Go back multiple times to reach home (adds small random delays):
+  - `for i in {1..5}; do npx tsx scripts/adb_helpers.ts -s SERIAL keyevent KEYCODE_BACK; sleep 0.$((RANDOM%6+5)); done`
 
-## Text input
+## Text input (ADBKeyboard)
 
-### ADB Keyboard (preferred)
-
-- Set IME: `adb -s <device_id> shell ime set com.android.adbkeyboard/.AdbIME`
-- Send text (base64):
-  - `adb -s <device_id> shell am broadcast -a ADB_INPUT_B64 --es msg <base64>`
 - Clear text:
-  - `adb -s <device_id> shell am broadcast -a ADB_CLEAR_TEXT`
-
-### `input text` (escape required)
-
-- Basic: `adb -s <device_id> shell input text '<escaped>'`
-- Escaping hints:
-  - Space: replace with `%s`
-  - Single quote: escape for shell or use double quotes
-  - Backslash: `\\`
+  - `npx tsx scripts/adb_helpers.ts -s SERIAL clear-text`
+- Input text:
+  - `npx tsx scripts/adb_helpers.ts -s SERIAL text --adb-keyboard "YOUR_TEXT"`
 
 ## Screenshots
 
-- Fast local capture:
-  - `adb -s <device_id> exec-out screencap -p > screen.png`
-- Two-step fallback:
-  - `adb -s <device_id> shell screencap -p /sdcard/screen.png`
-  - `adb -s <device_id> pull /sdcard/screen.png .`
+- Capture to file:
+  - `npx tsx scripts/adb_helpers.ts -s SERIAL screenshot -out "<path>/shot.png"`
 
 ## UI tree
 
-- Dump UI XML:
-  - `adb -s <device_id> shell uiautomator dump /sdcard/ui.xml`
-  - `adb -s <device_id> pull /sdcard/ui.xml .`
+- Dump UI:
+  - `npx tsx scripts/adb_helpers.ts -s SERIAL dump-ui [--out path] [--parse]`

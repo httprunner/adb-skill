@@ -1,11 +1,11 @@
 ---
-name: harmony-hdc-ts
-description: HarmonyOS device control and UI automation via HDC with a TypeScript helper CLI. Use when tasks involve connecting to HarmonyOS devices/emulators, running hdc shell commands, inputting taps/text, launching abilities, or general device management.
+name: harmony-hdc-py
+description: HarmonyOS device control and UI automation via HDC. Use when tasks involve connecting to HarmonyOS devices/emulators, running hdc shell commands, inputting taps/text, launching abilities, or general device management.
 ---
 
-# HDC (TypeScript)
+# HDC
 
-Use this skill to drive HarmonyOS devices with `hdc` and the TypeScript helper CLI for common device management and UI actions.
+Use this skill to drive HarmonyOS devices with `hdc` for common device management and UI actions.
 
 ## Quick workflow
 
@@ -23,14 +23,14 @@ Use this skill to drive HarmonyOS devices with `hdc` and the TypeScript helper C
 
 ## Resources
 
-- Helper script: `scripts/hdc_helpers.ts` (subcommand-based CLI wrapper). Use it for repeatable tasks.
+- Helper script: `scripts/hdc_helpers.py` (argparse-based CLI wrappers). Use it for repeatable tasks.
 
 ## Script usage
 
 Run:
 
 ```bash
-npx tsx scripts/hdc_helpers.ts --help
+python scripts/hdc_helpers.py --help
 ```
 
 Prefer script subcommands for:

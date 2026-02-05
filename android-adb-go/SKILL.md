@@ -24,13 +24,13 @@ If `go` is not available, use the `go-installer` skill first. If that skill is n
   - `--parse` outputs clickable elements (buttons) and input fields (EditText).
 - Use this to find coordinates for `tap` or text/resource-ids for validation.
 
-## UI Inspection (Vision-Based via ai-vision)
+## UI Inspection (Vision-Based via ai-vision-go)
 
-If `dump-ui` returns empty/partial trees, call the `ai-vision` skill to infer coordinates from a screenshot, then feed those coordinates into `adb` taps. This keeps UI understanding separate from device control. `ai-vision` returns absolute pixel coordinates ready for `adb_helpers`.
+If `dump-ui` returns empty/partial trees, call the `ai-vision-go` skill to infer coordinates from a screenshot, then feed those coordinates into `adb` taps. This keeps UI understanding separate from device control. `ai-vision-go` returns absolute pixel coordinates ready for `adb_helpers`.
 
 Quick flow:
 1. Capture screenshot.
-2. Use `ai-vision` to query coordinates or assert UI text.
+2. Use `ai-vision-go` to query coordinates or assert UI text.
 3. Apply returned `(x, y)` with `go run scripts/adb_helpers.go tap X Y`.
 
 Example:
@@ -40,8 +40,8 @@ mkdir -p ~/.eval/screenshots
 SCREENSHOT=~/.eval/screenshots/ui_$(date +"%Y%m%d_%H%M%S").png
 go run scripts/adb_helpers.go -s SERIAL screenshot -out "$SCREENSHOT"
 
-# 2) Query coordinates with ai-vision
-go run ../ai-vision/scripts/ai_vision.go query \
+# 2) Query coordinates with ai-vision-go
+go run ../ai-vision-go/scripts/ai_vision.go query \
   --screenshot "$SCREENSHOT" \
   --prompt "请识别屏幕上与“搜索”相关的文字或放大镜图标，并返回其坐标"
 

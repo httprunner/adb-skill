@@ -3,59 +3,59 @@
 ## 约定
 - 若未指定设备类型，默认为 Android；若未指定设备序列号，在连接的设备中随机挑选一台
 - 所有设备操作命令默认带 `-s SERIAL`。
-- 所有 `android-adb-go` 命令在 `android-adb-go` 目录执行。
+- 所有 `android-adb` 命令在 `android-adb` 目录执行。
 - 所有 `ai-vision` 命令在 `ai-vision` 目录执行。
 - 截图目录统一为 `~/.eval/screenshots/`。
-- `ai-vision` 会返回已转换的绝对像素坐标，直接用于 `adb_helpers.go` 操作。
+- `ai-vision` 会返回已转换的绝对像素坐标，直接用于 `adb_helpers.ts` 操作。
 
 ## 预检
 - 列出设备并获取 serial：
-  `go run scripts/adb_helpers.go devices`
+  `npx tsx scripts/adb_helpers.ts devices`
 - 查询分辨率：
-  `go run scripts/adb_helpers.go -s SERIAL wm-size`
+  `npx tsx scripts/adb_helpers.ts -s SERIAL wm-size`
 - 检查微信是否安装：
-  `go run scripts/adb_helpers.go -s SERIAL shell pm list packages | rg -n "com.tencent.mm"`
+  `npx tsx scripts/adb_helpers.ts -s SERIAL shell pm list packages | rg -n "com.tencent.mm"`
 - 准备截图目录：
   `mkdir -p ~/.eval/screenshots`
 
 ## 启动微信
 - 查看当前前台应用：
-  `go run scripts/adb_helpers.go -s SERIAL get-current-app`
+  `npx tsx scripts/adb_helpers.ts -s SERIAL get-current-app`
 - 返回手机桌面（多次 BACK 直到桌面，含 500ms~1s 随机间隔）：
-  `for i in {1..5}; do go run scripts/adb_helpers.go -s SERIAL keyevent KEYCODE_BACK; sleep 0.$((RANDOM%6+5)); done`
+  `for i in {1..5}; do npx tsx scripts/adb_helpers.ts -s SERIAL keyevent KEYCODE_BACK; sleep 0.$((RANDOM%6+5)); done`
 - 启动微信：
-  `go run scripts/adb_helpers.go -s SERIAL launch com.tencent.mm`
+  `npx tsx scripts/adb_helpers.ts -s SERIAL launch com.tencent.mm`
 
 ## 截图与定位点击
 - 截图：
   `SCREENSHOT=~/.eval/screenshots/wechat_$(date +"%Y%m%d_%H%M%S").png`
-  `go run scripts/adb_helpers.go -s SERIAL screenshot -out "$SCREENSHOT"`
+  `npx tsx scripts/adb_helpers.ts -s SERIAL screenshot -out "$SCREENSHOT"`
 - 通过 ai-vision 获取下一步点击坐标：
-  `go run scripts/ai_vision.go plan-next --screenshot "$SCREENSHOT" --instruction "<你的操作指令>"`
+  `npx tsx scripts/ai_vision.ts plan-next --screenshot "$SCREENSHOT" --instruction "<你的操作指令>"`
 - 点击坐标（ai-vision 输出为 0-1000 相对坐标，adb_helpers 会自动转换为绝对坐标）：
-  `go run scripts/adb_helpers.go -s SERIAL tap X Y`
+  `npx tsx scripts/adb_helpers.ts -s SERIAL tap X Y`
 
 ## 进入搜索页前的滑动
 - 当搜索框被视频 UI 遮挡时，先滑动一屏：
-  `go run scripts/adb_helpers.go -s SERIAL swipe 540 1400 540 600 600`
+  `npx tsx scripts/adb_helpers.ts -s SERIAL swipe 540 1400 540 600 600`
 
 ## 输入并触发搜索
 - 清空输入框：
-  `go run scripts/adb_helpers.go -s SERIAL clear-text`
+  `npx tsx scripts/adb_helpers.ts -s SERIAL clear-text`
 - 输入文本（使用 ADBKeyboard）：
-  `go run scripts/adb_helpers.go -s SERIAL text --adb-keyboard "QUERY"`
+  `npx tsx scripts/adb_helpers.ts -s SERIAL text --adb-keyboard "QUERY"`
 - 触发搜索：
-  `go run scripts/adb_helpers.go -s SERIAL keyevent KEYCODE_ENTER`
+  `npx tsx scripts/adb_helpers.ts -s SERIAL keyevent KEYCODE_ENTER`
 - 若未进入结果页，重试 `KEYCODE_ENTER`。
 
 ## 结果滚动到底
 - 滑动一屏：
-  `go run scripts/adb_helpers.go -s SERIAL swipe 540 1800 540 400 800`
+  `npx tsx scripts/adb_helpers.ts -s SERIAL swipe 540 1800 540 400 800`
 - 每滑动 5 次后用 ai-vision 判断是否触底：
-  `go run scripts/ai_vision.go plan-next --screenshot "$SCREENSHOT" --instruction "判断是否已到结果底部（是否出现底部分割线），若未到底请继续滑动"`
+  `npx tsx scripts/ai_vision.ts plan-next --screenshot "$SCREENSHOT" --instruction "判断是否已到结果底部（是否出现底部分割线），若未到底请继续滑动"`
 
 ## 弹窗处理
 - 截图后让 ai-vision 识别关闭按钮（优先关闭或取消）：
-  `go run scripts/ai_vision.go plan-next --screenshot "$SCREENSHOT" --instruction "识别并关闭当前弹窗（优先关闭或取消），若无弹窗则提示继续原流程"`
+  `npx tsx scripts/ai_vision.ts plan-next --screenshot "$SCREENSHOT" --instruction "识别并关闭当前弹窗（优先关闭或取消），若无弹窗则提示继续原流程"`
 - 关闭弹窗：
-  `go run scripts/adb_helpers.go -s SERIAL tap X Y`
+  `npx tsx scripts/adb_helpers.ts -s SERIAL tap X Y`

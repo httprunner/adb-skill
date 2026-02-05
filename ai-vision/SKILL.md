@@ -20,35 +20,35 @@ For non-Doubao providers, pass explicit flags:
 Default model if none provided: `doubao-seed-1-6-vision-250815`.
 
 ## Script
-Path: `scripts/ai_vision.go`
+Path: `scripts/ai_vision.ts`
 
 Run with:
 ```bash
-go run scripts/ai_vision.go --help
+npx tsx scripts/ai_vision.ts --help
 ```
 
 Log level (for troubleshooting raw model response):
 ```bash
-go run scripts/ai_vision.go --log-level debug <command> [flags]
+npx tsx scripts/ai_vision.ts --log-level debug <command> [flags]
 ```
 
 ### AIQuery
 ```bash
-go run scripts/ai_vision.go query \
+npx tsx scripts/ai_vision.ts query \
   --screenshot ~/.eval/screenshots/ui_YYYYMMDD_HHMMSS.png \
   --prompt "请识别屏幕上的‘搜索’按钮，并返回其坐标"
 ```
 
 ### AIAssert
 ```bash
-go run scripts/ai_vision.go assert \
+npx tsx scripts/ai_vision.ts assert \
   --screenshot ~/.eval/screenshots/ui_YYYYMMDD_HHMMSS.png \
   --assertion "当前页面包含搜索框"
 ```
 
 ### plan-next (single-step planning)
 ```bash
-go run scripts/ai_vision.go plan-next \
+npx tsx scripts/ai_vision.ts plan-next \
   --screenshot ~/.eval/screenshots/ui_YYYYMMDD_HHMMSS.png \
   --instruction "点击放大镜图标进入搜索页"
 ```

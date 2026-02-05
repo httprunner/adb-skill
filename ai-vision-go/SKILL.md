@@ -1,5 +1,5 @@
 ---
-name: ai-vision-ts
+name: ai-vision-go
 description: Multimodal UI understanding and single-step planning via OpenAI-compatible Responses APIs. Use when you need AIQuery/AIAssert and plan-next to extract UI element coordinates, validate UI assertions, summarize screenshots, or decide the next UI action from an image. External agents handle execution via adb/hdc and multi-step loops. Defaults to Doubao models but can be pointed at other multimodal providers via base URL, API key, and model name.
 ---
 
@@ -20,35 +20,35 @@ For non-Doubao providers, pass explicit flags:
 Default model if none provided: `doubao-seed-1-6-vision-250815`.
 
 ## Script
-Path: `scripts/ai_vision.ts`
+Path: `scripts/ai_vision.go`
 
 Run with:
 ```bash
-npx tsx scripts/ai_vision.ts --help
+go run scripts/ai_vision.go --help
 ```
 
 Log level (for troubleshooting raw model response):
 ```bash
-npx tsx scripts/ai_vision.ts --log-level debug <command> [flags]
+go run scripts/ai_vision.go --log-level debug <command> [flags]
 ```
 
 ### AIQuery
 ```bash
-npx tsx scripts/ai_vision.ts query \
+go run scripts/ai_vision.go query \
   --screenshot ~/.eval/screenshots/ui_YYYYMMDD_HHMMSS.png \
   --prompt "请识别屏幕上的‘搜索’按钮，并返回其坐标"
 ```
 
 ### AIAssert
 ```bash
-npx tsx scripts/ai_vision.ts assert \
+go run scripts/ai_vision.go assert \
   --screenshot ~/.eval/screenshots/ui_YYYYMMDD_HHMMSS.png \
   --assertion "当前页面包含搜索框"
 ```
 
 ### plan-next (single-step planning)
 ```bash
-npx tsx scripts/ai_vision.ts plan-next \
+go run scripts/ai_vision.go plan-next \
   --screenshot ~/.eval/screenshots/ui_YYYYMMDD_HHMMSS.png \
   --instruction "点击放大镜图标进入搜索页"
 ```
