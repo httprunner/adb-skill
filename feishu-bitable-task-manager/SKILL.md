@@ -22,6 +22,7 @@ Follow the task table conventions when pulling and updating tasks in Feishu Bita
 - Date presets are **literal strings**: `Today`, `Yesterday`, `Any`.
 - For explicit dates (`YYYY-MM-DD`), use `ExactDate` filter payload when the table Date column is a datetime type. If the column is plain text, use the literal date string.
 - Default status is `pending` when omitted.
+- `--status` supports comma-separated priority list (e.g. `pending,failed`). When `--limit` is set, it fills from the first status, then falls back to the next if insufficient.
 
 4) Call Feishu Bitable search.
 - `POST /open-apis/bitable/v1/apps/{app_token}/tables/{table_id}/records/search`
@@ -67,6 +68,7 @@ export FEISHU_APP_ID=...
 export FEISHU_APP_SECRET=...
 export TASK_BITABLE_URL="https://.../base/APP_TOKEN?table=TABLE_ID&view=VIEW_ID"
 npx tsx scripts/bitable_task.ts fetch --app com.smile.gifmaker --scene 综合页搜索 --status pending --date Today --limit 10
+npx tsx scripts/bitable_task.ts fetch --app com.smile.gifmaker --scene 综合页搜索 --status pending,failed --date Today --limit 10
 npx tsx scripts/bitable_task.ts fetch --app com.smile.gifmaker --scene 综合页搜索 --status pending --date 2026-02-05 --limit 10
 ```
 

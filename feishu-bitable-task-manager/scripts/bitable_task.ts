@@ -195,17 +195,19 @@ function decodeTask(fieldsRaw: Record<string, any>, mapping: Record<string, stri
   return [t, true];
 }
 
-async function FetchTasks(opts: any) {
+type FetchResult = { tasks: Task[]; elapsedSeconds: number; hasMore: boolean; nextPageToken: string; pages: number };
+
+async function FetchTasksOnce(opts: any): Promise<FetchResult | { err: true; code: number }> {
   const taskURL = (opts.task_url || "").trim();
   if (!taskURL) {
     errLogger.error("TASK_BITABLE_URL is required");
-    return 2;
+    return { err: true, code: 2 };
   }
   const appID = Env("FEISHU_APP_ID", "");
   const appSecret = Env("FEISHU_APP_SECRET", "");
   if (!appID || !appSecret) {
     errLogger.error("FEISHU_APP_ID/FEISHU_APP_SECRET are required");
-    return 2;
+    return { err: true, code: 2 };
   }
   const baseURL = Env("FEISHU_BASE_URL", DefaultBaseURL);
   let ref: BitableRef;
@@ -213,7 +215,7 @@ async function FetchTasks(opts: any) {
     ref = ParseBitableURL(taskURL);
   } catch (err: any) {
     errLogger.error("parse bitable URL failed", { err: err?.message || String(err) });
-    return 2;
+    return { err: true, code: 2 };
   }
   const fields = LoadTaskFieldsFromEnv();
   const filterObj = buildFilter(fields, opts.app || "", opts.scene || "", opts.status || "", opts.date || "");
@@ -222,18 +224,18 @@ async function FetchTasks(opts: any) {
     token = await GetTenantAccessToken(baseURL, appID, appSecret);
   } catch (err: any) {
     errLogger.error("get tenant access token failed", { err: err?.message || String(err) });
-    return 2;
+    return { err: true, code: 2 };
   }
   if (!ref.AppToken) {
     if (!ref.WikiToken) {
       errLogger.error("bitable URL missing app_token and wiki_token");
-      return 2;
+      return { err: true, code: 2 };
     }
     try {
       ref.AppToken = await ResolveWikiAppToken(baseURL, token, ref.WikiToken);
     } catch (err: any) {
       errLogger.error("resolve wiki app token failed", { err: err?.message || String(err) });
-      return 2;
+      return { err: true, code: 2 };
     }
   }
   let viewID = (opts.view_id || "").trim();
@@ -263,11 +265,11 @@ async function FetchTasks(opts: any) {
       resp = await RequestJSON("POST", urlStr, token, body, true);
     } catch (err: any) {
       errLogger.error("search records request failed", { err: err?.message || String(err) });
-      return 2;
+      return { err: true, code: 2 };
     }
     if (resp.code !== 0) {
       errLogger.error("search records failed", { code: resp.code, msg: resp.msg });
-      return 2;
+      return { err: true, code: 2 };
     }
     items.push(...(resp.data?.items || []));
     pages++;
@@ -292,20 +294,13 @@ async function FetchTasks(opts: any) {
     tasks.push(t);
   }
 
-  if (opts.jsonl) {
-    for (const t of tasks) logger.info("task", { task: t });
-    return 0;
-  }
-
-  logger.info("tasks", {
-    data: {
-      tasks,
-      count: tasks.length,
-      elapsed_seconds: elapsed,
-      page_info: { has_more: Boolean(pageToken), next_page_token: pageToken, pages },
-    },
-  });
-  return 0;
+  return {
+    tasks,
+    elapsedSeconds: elapsed,
+    hasMore: Boolean(pageToken),
+    nextPageToken: pageToken,
+    pages,
+  };
 }
 
 function parseCSVSet(raw: string) {
@@ -315,6 +310,60 @@ function parseCSVSet(raw: string) {
     if (p) out[p] = true;
   }
   return out;
+}
+
+function parseCSVList(raw: string) {
+  const out: string[] = [];
+  const seen: Record<string, boolean> = {};
+  for (const part of raw.split(",")) {
+    const p = part.trim();
+    if (!p) continue;
+    const key = p.toLowerCase();
+    if (seen[key]) continue;
+    seen[key] = true;
+    out.push(p);
+  }
+  return out;
+}
+
+async function FetchTasks(opts: any) {
+  const statuses = parseCSVList(opts.status || "");
+  const statusList = statuses.length ? statuses : ["pending"];
+  const tasks: Task[] = [];
+  let totalElapsed = 0;
+  let lastPageInfo = { hasMore: false, nextPageToken: "", pages: 0 };
+
+  const limit = Number(opts.limit || 0);
+  for (const status of statusList) {
+    const remaining = limit > 0 ? Math.max(limit - tasks.length, 0) : 0;
+    if (limit > 0 && remaining <= 0) break;
+    const perOpts = { ...opts, status };
+    if (limit > 0) perOpts.limit = remaining;
+    const res = await FetchTasksOnce(perOpts);
+    if ("err" in res) return res.code;
+    tasks.push(...res.tasks);
+    totalElapsed += res.elapsedSeconds;
+    lastPageInfo = { hasMore: res.hasMore, nextPageToken: res.nextPageToken, pages: res.pages };
+    if (limit > 0 && tasks.length >= limit) {
+      tasks.splice(limit);
+      break;
+    }
+  }
+
+  if (opts.jsonl) {
+    for (const t of tasks) logger.info("task", { task: t });
+    return 0;
+  }
+
+  logger.info("tasks", {
+    data: {
+      tasks,
+      count: tasks.length,
+      elapsed_seconds: Math.floor(totalElapsed * 1000) / 1000,
+      page_info: lastPageInfo,
+    },
+  });
+  return 0;
 }
 
 function buildIDFilter(fieldName: string, values: string[]) {
@@ -1173,7 +1222,7 @@ async function main() {
     .option("--task-url <url>", "Bitable task table URL")
     .option("--app <value>", "App value for filter (required)")
     .option("--scene <value>", "Scene value for filter (required)")
-    .option("--status <value>", "Task status filter (default: pending)")
+    .option("--status <value>", "Task status filter; supports comma-separated priority list (default: pending)")
     .option("--date <value>", "Date preset: Today/Yesterday/Any")
     .option("--limit <n>", "Max tasks to return (0 = no cap)")
     .option("--page-size <n>", "Page size (max 500)")

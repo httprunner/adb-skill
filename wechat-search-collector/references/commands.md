@@ -56,6 +56,29 @@
 - 每滑动 5 次后用 ai-vision 判断是否触底：
   `npx tsx scripts/ai_vision.ts plan-next --screenshot "$SCREENSHOT" --instruction "判断是否已到结果底部（是否出现底部分割线），若未到底请继续滑动"`
 
+## Feishu 任务拉取
+
+### 综合页搜索
+- 拉取任务：
+  `export FEISHU_APP_ID=...`
+  `export FEISHU_APP_SECRET=...`
+  `export TASK_BITABLE_URL="https://.../base/APP_TOKEN?table=TABLE_ID"`
+  `npx tsx /Users/debugtalk/MyProjects/HttpRunner-dev/skills/feishu-bitable-task-manager/scripts/bitable_task.ts fetch --app com.tencent.mm --scene 综合页搜索 --status pending,failed --date Today --limit 1`
+- 映射参数：
+  `TaskID -> TASK_ID`
+  `Params -> KEYWORDS`（逗号或换行拆分）
+
+### 个人页搜索
+- 拉取任务：
+  `export FEISHU_APP_ID=...`
+  `export FEISHU_APP_SECRET=...`
+  `export TASK_BITABLE_URL="https://.../base/APP_TOKEN?table=TABLE_ID"`
+  `npx tsx /Users/debugtalk/MyProjects/HttpRunner-dev/skills/feishu-bitable-task-manager/scripts/bitable_task.ts fetch --app com.tencent.mm --scene 个人页搜索 --status pending,failed --date Today --limit 1`
+- 映射参数：
+  `TaskID -> TASK_ID`
+  `UserName -> ACCOUNT_NAME`
+  `Params -> KEYWORDS`（逗号或换行拆分）
+
 ## 弹窗处理
 - 截图后让 ai-vision 识别关闭按钮（优先关闭或取消）：
   `npx tsx scripts/ai_vision.ts plan-next --screenshot "$SCREENSHOT" --instruction "识别并关闭当前弹窗（优先关闭或取消），若无弹窗则提示继续原流程"`

@@ -12,6 +12,27 @@ description: 微信视频号搜索与结果遍历的自动化采集流程（Andr
 - 为避免依赖问题，所有命令需在各自 skill 目录内执行：`android-adb` 的命令在其目录运行，`ai-vision` 的命令在其目录运行。
 - 截图与相关产物输出目录由 `TASK_ID` 控制：若指定 `TASK_ID` 则写入 `~/.eval/<TASK_ID>/`，未指定则写入 `~/.eval/debug/`。文件名带时间戳避免覆盖。
 - 具体命令已抽离到 `references/commands.md`，流程中只描述关键步骤。
+- 如需从飞书多维表格拉取搜索任务，使用 `feishu-bitable-task-manager` 获取任务参数后再进入对应流程。
+
+## 任务拉取（Feishu Bitable）
+当需要“从任务表获取搜索任务并执行”时，先用 `feishu-bitable-task-manager` 拉取任务，再将任务字段映射到本技能的参数。
+每次只拉取并执行 1 条任务（`--limit 1`），状态优先级使用 `--status pending,failed`。
+具体命令示例见 `references/commands.md`。
+
+### 综合页搜索任务
+- 过滤条件：`Scene=综合页搜索`、`App=com.tencent.mm`、`Date=Today`、`Status=pending/failed`。
+- 从任务记录中读取：
+  - `TaskID` 作为 `TASK_ID`
+  - `Params` 作为搜索关键词（可按逗号或换行拆分为 `KEYWORDS`）
+拿到记录后将 `TaskID` 作为 `TASK_ID`，`Params` 作为 `KEYWORDS` 进入“综合页搜索流程”。
+
+### 个人页搜索任务
+- 过滤条件：`Scene=个人页搜索`、`App=com.tencent.mm`、`Date=Today`、`Status=pending/failed`。
+- 从任务记录中读取：
+  - `TaskID` 作为 `TASK_ID`
+  - `UserName` 作为账号名称（`ACCOUNT_NAME`）
+  - `Params` 作为搜索关键词（可按逗号或换行拆分为 `KEYWORDS`）
+拿到记录后将 `TaskID` 作为 `TASK_ID`，`UserName` 作为 `ACCOUNT_NAME`，`Params` 作为 `KEYWORDS` 进入“个人页搜索流程”。
 
 ## 综合页搜索流程
 适用于“在视频号综合页搜索单个或多个关键词并遍历结果”的需求。
