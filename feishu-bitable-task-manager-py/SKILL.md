@@ -1,6 +1,6 @@
 ---
 name: feishu-bitable-task-manager-py
-description: Manage tasks in Feishu Bitable (multi-dimensional table): fetch, update, and create flows using a fixed schema, filters, pagination, and status update rules. Use when building or running task pullers/reporters that must match a specific task status table and its field mapping, status presets, and date presets.
+description: Manage tasks in Feishu Bitable (multi-dimensional table), fetch, update, and create flows using a fixed schema, filters, pagination, and status update rules. Use when building or running task pullers/reporters that must match a specific task status table and its field mapping, status presets, and date presets.
 ---
 
 # Feishu Bitable Task Manager
