@@ -32,6 +32,10 @@ Log level (for troubleshooting raw model response):
 npx tsx scripts/ai_vision.ts --log-level debug <command> [flags]
 ```
 
+Output formatting:
+- When `--log-json` is set, logs are emitted as JSON.
+- Otherwise, the final result is pretty-printed JSON, and logs are colorized when TTY is available.
+
 ### AIQuery
 ```bash
 npx tsx scripts/ai_vision.ts query \

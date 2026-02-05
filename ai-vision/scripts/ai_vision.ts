@@ -2,6 +2,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { Command } from "commander";
+import chalk from "chalk";
 
 const envArkBaseURL = "ARK_BASE_URL";
 const envArkAPIKey = "ARK_API_KEY";
@@ -10,9 +11,17 @@ const defaultTimeoutMs = 120_000;
 
 type LogLevel = "debug" | "info" | "error";
 
-function createLogger(json: boolean, level: LogLevel, stream: NodeJS.WriteStream) {
+function createLogger(json: boolean, level: LogLevel, stream: NodeJS.WriteStream, color: boolean) {
   const levels: Record<LogLevel, number> = { debug: 10, info: 20, error: 40 };
   const min = levels[level] ?? 20;
+  const useColor = color && !json;
+  const levelColor = (lv: LogLevel, value: string) => {
+    if (!useColor) return value;
+    return lv === "error" ? chalk.red(value) : lv === "debug" ? chalk.cyan(value) : chalk.green(value);
+  };
+  const keyColor = (value: string) => (useColor ? chalk.blue(value) : value);
+  const msgColor = (value: string) => (useColor ? chalk.green(value) : value);
+  const valueColor = (value: string) => (useColor ? chalk.dim(value) : value);
   function shouldLog(lv: LogLevel) {
     return levels[lv] >= min;
   }
@@ -39,10 +48,14 @@ function createLogger(json: boolean, level: LogLevel, stream: NodeJS.WriteStream
       stream.write(`${JSON.stringify(payload)}\n`);
       return;
     }
-    const parts = [`time=${time}`, `level=${lv.toUpperCase()}`, `msg=${msg}`];
+    const parts = [
+      `${keyColor("time")}=${valueColor(time)}`,
+      `${keyColor("level")}=${levelColor(lv, lv.toUpperCase())}`,
+      `${keyColor("msg")}=${msgColor(msg)}`,
+    ];
     if (fields) {
       for (const [k, v] of Object.entries(fields)) {
-        parts.push(`${k}=${formatValue(v)}`);
+        parts.push(`${keyColor(k)}=${valueColor(formatValue(v))}`);
       }
     }
     stream.write(parts.join(" ") + "\n");
@@ -54,12 +67,15 @@ function createLogger(json: boolean, level: LogLevel, stream: NodeJS.WriteStream
   };
 }
 
-let logger = createLogger(false, "info", process.stdout);
-let errLogger = createLogger(false, "info", process.stderr);
+let logJsonEnabled = false;
+let logger = createLogger(false, "info", process.stderr, false);
+let errLogger = createLogger(false, "info", process.stderr, false);
 
 function setLoggerConfig(jsonEnabled: boolean, level: LogLevel) {
-  logger = createLogger(jsonEnabled, level, process.stdout);
-  errLogger = createLogger(jsonEnabled, level, process.stderr);
+  logJsonEnabled = jsonEnabled;
+  const stdoutColor = Boolean(process.stderr.isTTY) && !jsonEnabled;
+  logger = createLogger(jsonEnabled, level, process.stderr, stdoutColor);
+  errLogger = createLogger(jsonEnabled, level, process.stderr, stdoutColor);
 }
 
 function setLoggerFromProgram(program: Command) {
@@ -418,29 +434,33 @@ function parseJSONPlanning(content: string, size: { width: number; height: numbe
     const processed = processActionArguments(act.action_inputs || {}, size);
     actions.push(convertAction({ action_type: act.action_type, action_inputs: processed }));
   }
-  return { thought: resp.thought, actions, content };
+  return { thought: resp.thought, actions };
 }
 
 function printJSON(value: any) {
-  if (value && typeof value === "object" && "actions" in value && "thought" in value) {
-    logger.info("result", { status: value.status, thought: value.thought, actions: value.actions });
-    return 0;
-  }
-  if (value && typeof value === "object" && "result" in value) {
-    const status = value.status;
-    const result = value.result as any;
-    if (result && typeof result === "object") {
-      if ("pass" in result) {
-        logger.info("result", { status, pass: result.pass, thought: result.thought, content: result.content });
-        return 0;
-      }
-      if ("content" in result || "data" in result) {
-        logger.info("result", { status, thought: result.thought, content: result.content, data: result.data });
-        return 0;
+  if (logJsonEnabled) {
+    if (value && typeof value === "object" && "actions" in value && "thought" in value) {
+      logger.info("result", { status: value.status, thought: value.thought, actions: value.actions });
+      return 0;
+    }
+    if (value && typeof value === "object" && "result" in value) {
+      const status = value.status;
+      const result = value.result as any;
+      if (result && typeof result === "object") {
+        if ("pass" in result) {
+          logger.info("result", { status, pass: result.pass, thought: result.thought, content: result.content });
+          return 0;
+        }
+        if ("content" in result || "data" in result) {
+          logger.info("result", { status, thought: result.thought, content: result.content, data: result.data });
+          return 0;
+        }
       }
     }
+    logger.info("result", { data: value });
+    return 0;
   }
-  logger.info("result", { data: value });
+  process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
   return 0;
 }
 
