@@ -5,7 +5,7 @@
 - 所有设备操作命令默认带 `-s SERIAL`。
 - 所有 `android-adb` 命令在 `android-adb` 目录执行。
 - 所有 `ai-vision` 命令在 `ai-vision` 目录执行。
-- 截图目录统一为 `~/.eval/screenshots/`。
+- 截图与相关产物输出目录由 `TASK_ID` 控制：若指定 `TASK_ID` 则写入 `~/.eval/<TASK_ID>/`，未指定则写入 `~/.eval/debug/`。
 - `ai-vision` 会返回已转换的绝对像素坐标，直接用于 `adb_helpers.ts` 操作。
 
 ## 预检
@@ -15,8 +15,9 @@
   `npx tsx scripts/adb_helpers.ts -s SERIAL wm-size`
 - 检查微信是否安装：
   `npx tsx scripts/adb_helpers.ts -s SERIAL shell pm list packages | rg -n "com.tencent.mm"`
-- 准备截图目录：
-  `mkdir -p ~/.eval/screenshots`
+- 准备输出目录（有 `TASK_ID` 用对应目录，否则用 debug）：
+  `mkdir -p ~/.eval/<TASK_ID>`
+  `mkdir -p ~/.eval/debug`
 
 ## 启动微信
 - 查看当前前台应用：
@@ -27,8 +28,9 @@
   `npx tsx scripts/adb_helpers.ts -s SERIAL launch com.tencent.mm`
 
 ## 截图与定位点击
-- 截图：
-  `SCREENSHOT=~/.eval/screenshots/wechat_$(date +"%Y%m%d_%H%M%S").png`
+- 截图（有 `TASK_ID` 用对应目录，否则用 debug；文件名前缀无需固定）：
+  `SCREENSHOT=~/.eval/<TASK_ID>/$(date +"%Y%m%d_%H%M%S").png`
+  `SCREENSHOT=~/.eval/debug/$(date +"%Y%m%d_%H%M%S").png`
   `npx tsx scripts/adb_helpers.ts -s SERIAL screenshot -out "$SCREENSHOT"`
 - 通过 ai-vision 获取下一步点击坐标：
   `npx tsx scripts/ai_vision.ts plan-next --screenshot "$SCREENSHOT" --instruction "<你的操作指令>"`

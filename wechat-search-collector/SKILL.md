@@ -10,7 +10,7 @@ description: 微信视频号搜索与结果遍历的自动化采集流程（Andr
 
 - 执行层需使用 `android-adb` 实现 Android 设备管理和 UI 操作，使用 `ai-vision` 从截图中定位 UI 元素并推理下一步动作，不要使用 `dump-ui` 做元素发现。当前 `ai-vision` 实现会输出已转换的绝对像素坐标，可直接用于 adb 操作。
 - 为避免依赖问题，所有命令需在各自 skill 目录内执行：`android-adb` 的命令在其目录运行，`ai-vision` 的命令在其目录运行。
-- 截图统一写入 `~/.eval/screenshots/`，文件名带时间戳避免覆盖。
+- 截图与相关产物输出目录由 `TASK_ID` 控制：若指定 `TASK_ID` 则写入 `~/.eval/<TASK_ID>/`，未指定则写入 `~/.eval/debug/`。文件名带时间戳避免覆盖。
 - 具体命令已抽离到 `references/commands.md`，流程中只描述关键步骤。
 
 ## 综合页搜索流程
@@ -18,6 +18,7 @@ description: 微信视频号搜索与结果遍历的自动化采集流程（Andr
 
 ### 1. 预检
 - 确认驱动与依赖可用，获取设备 serial，准备截图目录。
+- 若提供 `TASK_ID` 参数，创建输出目录 `~/.eval/<TASK_ID>/`；否则创建 `~/.eval/debug/`。
 - 确认已提供搜索词列表 `KEYWORDS`（逗号或换行分隔）。
 
 ### 2. 启动微信
@@ -49,6 +50,7 @@ description: 微信视频号搜索与结果遍历的自动化采集流程（Andr
 
 ### 1. 预检
 - 确认驱动与依赖可用，获取设备 serial，准备截图目录。
+- 若提供 `TASK_ID` 参数，创建输出目录 `~/.eval/<TASK_ID>/`；否则创建 `~/.eval/debug/`。
 - 确认已提供账号名称 `ACCOUNT_NAME` 与关键词列表 `KEYWORDS`（逗号或换行分隔）。
 
 ### 2. 启动微信
