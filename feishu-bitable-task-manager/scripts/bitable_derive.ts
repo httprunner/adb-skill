@@ -519,6 +519,7 @@ async function main() {
       .allowExcessArguments(false)
       .option("--input <path>", "Input JSONL path (or - for stdin)")
       .option("--task-url <url>", "Task Bitable URL (default: TASK_BITABLE_URL)")
+      .option("--limit <count>", "Limit number of source rows to process", (v) => Number.parseInt(v, 10))
       .option("--app <app>", "Task app", "com.smile.gifmaker")
       .option("--extra <extra>", "Task extra", "春节档专项")
       .option("--params-list", "Store [短剧名, 主角名, 付费剧名] as a JSON list in Params (one task per source row)")
@@ -566,7 +567,9 @@ async function main() {
     }
     const useView = false;
     const pageSize = 200;
-    const sourceItems = parseInputItems(inputPath).map((it: any) => (it && typeof it === "object" && (it as any).fields ? (it as any).fields : it));
+    let sourceItems = parseInputItems(inputPath).map((it: any) => (it && typeof it === "object" && (it as any).fields ? (it as any).fields : it));
+    const limit = Number.isFinite(opts.limit) ? Math.max(0, Number(opts.limit)) : 0;
+    if (limit > 0) sourceItems = sourceItems.slice(0, limit);
     const fixedOpts = { ...opts, scene: "综合页搜索", date: "Today", status: "pending" };
     const { derived, filtered } = deriveTasksFromSource(sourceItems, sourceFieldMap, fixedOpts);
     let existingBookIDs = new Set<string>();
@@ -614,6 +617,7 @@ async function main() {
       .description("Fetch source and create tasks in one step")
       .option("--bitable-url <url>", "Source Bitable URL (original table)")
       .option("--task-url <url>", "Task Bitable URL (default: TASK_BITABLE_URL)")
+      .option("--limit <count>", "Limit number of source rows to process", (v) => Number.parseInt(v, 10))
       .option("--app <app>", "Task app", "com.smile.gifmaker")
       .option("--extra <extra>", "Task extra", "春节档专项")
       .option("--params-list", "Store [短剧名, 主角名, 付费剧名] as a JSON list in Params (one task per source row)")
@@ -664,7 +668,8 @@ async function main() {
     }
     const useView = false;
     const pageSize = 200;
-    const sourceItems = await fetchAllRecords(baseURL, token, sourceRef, pageSize, sourceRef.ViewID, Boolean(sourceRef.ViewID));
+    const limit = Number.isFinite(opts.limit) ? Math.max(0, Number(opts.limit)) : 0;
+    const sourceItems = await fetchAllRecords(baseURL, token, sourceRef, pageSize, sourceRef.ViewID, Boolean(sourceRef.ViewID), null, limit || undefined);
     const sourceFields = sourceItems.map((it: any) => it.fields || {});
     const fixedOpts = { ...opts, scene: "综合页搜索", date: "Today", status: "pending" };
     const { derived, filtered } = deriveTasksFromSource(sourceFields, sourceFieldMap, fixedOpts);

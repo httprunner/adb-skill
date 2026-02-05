@@ -166,6 +166,7 @@ npx tsx scripts/bitable_derive.ts sync \
   --task-url "https://.../base/TASK_APP?table=TASK_TABLE" \
   --app com.smile.gifmaker \
   --extra 春节档专项 \
+  --limit 10 \
   --skip-existing
 ```
 
@@ -178,6 +179,7 @@ npx tsx scripts/bitable_derive.ts sync \
   --app com.smile.gifmaker \
   --extra 春节档专项 \
   --params-list \
+  --limit 10 \
   --skip-existing
 ```
 
@@ -196,7 +198,8 @@ npx tsx scripts/bitable_derive.ts create \
   --input source.jsonl \
   --skip-existing \
   --app com.smile.gifmaker \
-  --extra 春节档专项
+  --extra 春节档专项 \
+  --limit 10
 ```
 
 Notes:
