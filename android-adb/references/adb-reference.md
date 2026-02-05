@@ -57,8 +57,8 @@
   - Back: `npx tsx scripts/adb_helpers.ts -s SERIAL keyevent KEYCODE_BACK`
   - Home: `npx tsx scripts/adb_helpers.ts -s SERIAL keyevent KEYCODE_HOME`
   - Enter: `npx tsx scripts/adb_helpers.ts -s SERIAL keyevent KEYCODE_ENTER`
-- Go back multiple times to reach home (adds small random delays):
-  - `for i in {1..5}; do npx tsx scripts/adb_helpers.ts -s SERIAL keyevent KEYCODE_BACK; sleep 0.$((RANDOM%6+5)); done`
+- Go back to home (pair BACK actions with 0~1s random delays until home):
+  - `npx tsx scripts/adb_helpers.ts -s SERIAL back-home`
 
 ## Text input (ADBKeyboard)
 

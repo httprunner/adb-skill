@@ -21,8 +21,8 @@
 ## 启动微信
 - 查看当前前台应用：
   `npx tsx scripts/adb_helpers.ts -s SERIAL get-current-app`
-- 返回手机桌面（多次 BACK 直到桌面，含 500ms~1s 随机间隔）：
-  `for i in {1..5}; do npx tsx scripts/adb_helpers.ts -s SERIAL keyevent KEYCODE_BACK; sleep 0.$((RANDOM%6+5)); done`
+- 返回手机桌面（内部执行 2 次 BACK + 0~1s 随机间隔，直到到达桌面）：
+  `npx tsx scripts/adb_helpers.ts -s SERIAL back-home`
 - 启动微信：
   `npx tsx scripts/adb_helpers.ts -s SERIAL launch com.tencent.mm`
 

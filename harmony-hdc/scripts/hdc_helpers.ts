@@ -298,11 +298,13 @@ async function main() {
 
   program
     .command("devices")
+    .description("List connected devices")
     .action(() => {
       process.exit(cmdDevices(getSerial()));
     });
   program
     .command("connect")
+    .description("Connect to device over TCP/IP")
     .argument("<address>", "device address")
     .action((address: string) => {
       getGlobalOptions(program);
@@ -310,6 +312,7 @@ async function main() {
     });
   program
     .command("disconnect")
+    .description("Disconnect from device over TCP/IP")
     .argument("[address]", "device address")
     .action((address: string | undefined) => {
       getGlobalOptions(program);
@@ -317,17 +320,20 @@ async function main() {
     });
   program
     .command("get-ip")
+    .description("Get device IP address")
     .action(() => {
       process.exit(cmdGetIP(getSerial()));
     });
   program
     .command("shell")
+    .description("Run hdc shell command")
     .argument("<cmd...>", "shell command")
     .action((cmd: string[]) => {
       process.exit(cmdShell(getSerial(), cmd));
     });
   program
     .command("tap")
+    .description("Tap at coordinates")
     .argument("<x>", "x coordinate")
     .argument("<y>", "y coordinate")
     .action((x: string, y: string) => {
@@ -335,6 +341,7 @@ async function main() {
     });
   program
     .command("double-tap")
+    .description("Double tap at coordinates")
     .argument("<x>", "x coordinate")
     .argument("<y>", "y coordinate")
     .action((x: string, y: string) => {
@@ -342,6 +349,7 @@ async function main() {
     });
   program
     .command("swipe")
+    .description("Swipe from start to end coordinates")
     .argument("<x1>", "start x")
     .argument("<y1>", "start y")
     .argument("<x2>", "end x")
@@ -353,36 +361,42 @@ async function main() {
     });
   program
     .command("keyevent")
+    .description("Send keyevent by keycode")
     .argument("<keycode>", "key code")
     .action((keycode: string) => {
       process.exit(cmdKeyEvent(getSerial(), [keycode]));
     });
   program
     .command("text")
+    .description("Input text")
     .argument("<text>", "text to input")
     .action((text: string) => {
       process.exit(cmdText(getSerial(), [text]));
     });
   program
     .command("screenshot")
+    .description("Capture screenshot to file")
     .option("--out <path>", "output path")
     .action((options: { out?: string }) => {
       process.exit(cmdScreenshot(getSerial(), String(options.out || "")));
     });
   program
     .command("launch")
+    .description("Launch app by bundle/ability")
     .argument("<bundle>", "bundle or bundle/ability")
     .action((bundle: string) => {
       process.exit(cmdLaunch(getSerial(), [bundle]));
     });
   program
     .command("force-stop")
+    .description("Force-stop bundle")
     .argument("<bundle>", "bundle name")
     .action((bundle: string) => {
       process.exit(cmdForceStop(getSerial(), [bundle]));
     });
   program
     .command("get-current-app")
+    .description("Print current foreground bundle")
     .action(() => {
       process.exit(cmdGetCurrentApp(getSerial()));
     });

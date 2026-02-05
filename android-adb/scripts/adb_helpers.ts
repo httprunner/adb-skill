@@ -98,6 +98,17 @@ function runAdb(serial: string, capture: boolean, args: string[]): CmdResult {
   return runCmd(cmd, capture, defaultTimeoutMs);
 }
 
+function sleepMs(ms: number) {
+  if (ms <= 0) return;
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+function randomDelayMs(minMs: number, maxMs: number) {
+  const min = Math.max(0, Math.floor(minMs));
+  const max = Math.max(min, Math.floor(maxMs));
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
 type LaunchTargetKind = "package" | "uri" | "activity";
 
 type LaunchTarget = {
@@ -378,27 +389,81 @@ function cmdLaunch(serial: string, args: string[]) {
   return 0;
 }
 
-function cmdGetCurrentApp(serial: string) {
-  const result = runAdb(serial, true, ["shell", "dumpsys", "window"]);
-  const output = result.stdout;
+function extractCurrentPackage(output: string) {
   const re = /([a-zA-Z0-9_.]+\.[a-zA-Z0-9_.]+)\//;
   for (const line of output.split("\n")) {
     if (line.includes("mCurrentFocus") || line.includes("mFocusedApp")) {
       const match = line.match(re);
-      if (match && match[1]) {
-        console.log(match[1]);
-        return 0;
-      }
+      if (match && match[1]) return match[1];
       const parts = line.trim().split(/\s+/);
       for (const part of parts) {
-        if (part.includes("/")) {
-          console.log(part.split("/")[0]);
-          return 0;
-        }
+        if (part.includes("/")) return part.split("/")[0];
       }
     }
   }
+  return "";
+}
+
+function getCurrentPackage(serial: string) {
+  const result = runAdb(serial, true, ["shell", "dumpsys", "window"]);
+  return extractCurrentPackage(result.stdout);
+}
+
+function cmdGetCurrentApp(serial: string) {
+  const current = getCurrentPackage(serial);
+  if (current) {
+    console.log(current);
+    return 0;
+  }
   logger.error("system home (or unknown)");
+  return 1;
+}
+
+function parseHomePackages(output: string) {
+  const pkgs = new Set<string>();
+  for (const line of output.split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    const match = trimmed.match(/([a-zA-Z0-9_.]+)\/[a-zA-Z0-9_.]+/);
+    if (match?.[1]) pkgs.add(match[1]);
+    const pkgMatch = trimmed.match(/packageName=([a-zA-Z0-9_.]+)/);
+    if (pkgMatch?.[1]) pkgs.add(pkgMatch[1]);
+  }
+  return pkgs;
+}
+
+function getHomePackages(serial: string) {
+  let result = runAdb(serial, true, ["shell", "cmd", "package", "resolve-activity", "--brief", "-c", "android.intent.category.HOME"]);
+  let pkgs = parseHomePackages(result.stdout + result.stderr);
+  if (pkgs.size === 0) {
+    result = runAdb(serial, true, ["shell", "pm", "resolve-activity", "-a", "android.intent.action.MAIN", "-c", "android.intent.category.HOME"]);
+    pkgs = parseHomePackages(result.stdout + result.stderr);
+  }
+  return pkgs;
+}
+
+function cmdBackHome(serial: string, args: string[]) {
+  const maxRoundsRaw = args[0] ? Number(args[0]) : 20;
+  const maxRounds = Number.isFinite(maxRoundsRaw) && maxRoundsRaw > 0 ? Math.floor(maxRoundsRaw) : 20;
+  const homePkgs = getHomePackages(serial);
+  if (homePkgs.size === 0) {
+    logger.error("home package not found");
+  }
+  for (let round = 1; round <= maxRounds; round++) {
+    for (let i = 0; i < 2; i++) {
+      runAdb(serial, false, ["shell", "input", "keyevent", "4"]);
+      const delay = randomDelayMs(0, 1000);
+      sleepMs(delay);
+    }
+    const current = getCurrentPackage(serial);
+    const isHome = current ? homePkgs.has(current) : false;
+    logger.debug("back-home check", { round, current, isHome });
+    if (isHome) {
+      logger.info("home reached", { rounds: round, current });
+      return 0;
+    }
+  }
+  logger.error("home not reached after max rounds", { maxRounds });
   return 1;
 }
 
@@ -520,23 +585,27 @@ async function main() {
 
   program
     .command("devices")
+    .description("List connected devices")
     .action(() => {
       process.exit(cmdDevices(getSerial()));
     });
   program
     .command("start-server")
+    .description("Start adb server")
     .action(() => {
       getGlobalOptions(program);
       process.exit(cmdStartServer());
     });
   program
     .command("kill-server")
+    .description("Kill adb server")
     .action(() => {
       getGlobalOptions(program);
       process.exit(cmdKillServer());
     });
   program
     .command("connect")
+    .description("Connect to device over TCP/IP")
     .argument("[address]", "device address, e.g. 192.168.0.10:5555")
     .action((address: string | undefined) => {
       getGlobalOptions(program);
@@ -544,6 +613,7 @@ async function main() {
     });
   program
     .command("disconnect")
+    .description("Disconnect from device over TCP/IP")
     .argument("[address]", "device address")
     .action((address: string | undefined) => {
       getGlobalOptions(program);
@@ -551,23 +621,27 @@ async function main() {
     });
   program
     .command("get-ip")
+    .description("Get device IP address")
     .action(() => {
       process.exit(cmdGetIP(getSerial()));
     });
   program
     .command("enable-tcpip")
+    .description("Enable adb over TCP/IP")
     .argument("[port]", "tcpip port, default 5555")
     .action((port: string | undefined) => {
       process.exit(cmdEnableTCPIP(getSerial(), port ? [port] : []));
     });
   program
     .command("shell")
+    .description("Run adb shell command")
     .argument("<cmd...>", "shell command")
     .action((cmd: string[]) => {
       process.exit(cmdShell(getSerial(), cmd));
     });
   program
     .command("tap")
+    .description("Tap at coordinates")
     .argument("<x>", "x coordinate")
     .argument("<y>", "y coordinate")
     .action((x: string, y: string) => {
@@ -575,6 +649,7 @@ async function main() {
     });
   program
     .command("double-tap")
+    .description("Double tap at coordinates")
     .argument("<x>", "x coordinate")
     .argument("<y>", "y coordinate")
     .action((x: string, y: string) => {
@@ -582,6 +657,7 @@ async function main() {
     });
   program
     .command("swipe")
+    .description("Swipe from start to end coordinates")
     .argument("<x1>", "start x")
     .argument("<y1>", "start y")
     .argument("<x2>", "end x")
@@ -593,6 +669,7 @@ async function main() {
     });
   program
     .command("long-press")
+    .description("Long press at coordinates")
     .argument("<x>", "x coordinate")
     .argument("<y>", "y coordinate")
     .option("--duration-ms <ms>", "press duration in ms", "3000")
@@ -602,12 +679,14 @@ async function main() {
     });
   program
     .command("keyevent")
+    .description("Send keyevent by keycode")
     .argument("<keycode>", "key code")
     .action((keycode: string) => {
       process.exit(cmdKeyEvent(getSerial(), [keycode]));
     });
   program
     .command("text")
+    .description("Input text (optional ADBKeyboard)")
     .argument("<text>", "text to input")
     .option("--adb-keyboard", "use ADB Keyboard broadcast")
     .action((text: string, options: { adbKeyboard?: boolean }) => {
@@ -615,34 +694,47 @@ async function main() {
     });
   program
     .command("clear-text")
+    .description("Clear text via ADBKeyboard")
     .action(() => {
       process.exit(cmdClearText(getSerial()));
     });
   program
     .command("screenshot")
+    .description("Capture screenshot to file")
     .option("--out <path>", "output path")
     .action((options: { out?: string }) => {
       process.exit(cmdScreenshot(getSerial(), String(options.out || "")));
     });
   program
     .command("launch")
+    .description("Launch app by package/activity/uri")
     .argument("<target>", "package, activity or uri")
     .action((target: string) => {
       process.exit(cmdLaunch(getSerial(), [target]));
     });
   program
     .command("get-current-app")
+    .description("Print current foreground package")
     .action(() => {
       process.exit(cmdGetCurrentApp(getSerial()));
     });
   program
     .command("force-stop")
+    .description("Force-stop package")
     .argument("<package>", "package name")
     .action((pkg: string) => {
       process.exit(cmdForceStop(getSerial(), [pkg]));
     });
   program
+    .command("back-home")
+    .description("Press BACK in pairs until reaching home")
+    .argument("[max-rounds]", "max rounds, default 20")
+    .action((maxRounds: string | undefined) => {
+      process.exit(cmdBackHome(getSerial(), maxRounds ? [maxRounds] : []));
+    });
+  program
     .command("dump-ui")
+    .description("Dump UI hierarchy (uiautomator)")
     .option("--out <path>", "output path")
     .option("--parse", "parse UI hierarchy")
     .action((options: { out?: string; parse?: boolean }) => {
@@ -650,6 +742,7 @@ async function main() {
     });
   program
     .command("wm-size")
+    .description("Print screen size")
     .action(() => {
       process.exit(cmdWmSize(getSerial()));
     });
