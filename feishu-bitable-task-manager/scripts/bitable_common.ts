@@ -66,11 +66,16 @@ function firstQueryValue(q: URLSearchParams, keys: string[]) {
 export function ParseBitableURL(raw: string): BitableRef {
   const trimmed = raw.trim();
   if (!trimmed) throw new Error("bitable url is empty");
+  let normalized = trimmed.replace(/\\([?&=])/g, "$1");
+  if (normalized !== trimmed) {
+    // preserve original for error reporting
+  }
   let u: URL;
   try {
-    u = new URL(trimmed);
+    u = new URL(normalized);
   } catch (err) {
-    throw err;
+    // fallback to raw input if normalization breaks URL parsing
+    u = new URL(trimmed);
   }
   if (!u.protocol) throw new Error("bitable url missing scheme");
   const segments = u.pathname.split("/").filter((s) => s);
@@ -353,4 +358,3 @@ export function parseJSONLItems(raw: Buffer) {
   }
   return out;
 }
-

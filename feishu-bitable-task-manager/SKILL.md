@@ -20,7 +20,7 @@ Follow the task table conventions when pulling and updating tasks in Feishu Bita
 3) Build table filters (fetch/resolve paths).
 - Always filter by `App`, `Scene`, `Status`, and `Date` presets.
 - Date presets are **literal strings**: `Today`, `Yesterday`, `Any`.
-- For explicit dates (`YYYY-MM-DD`), use `ExactDate` filter payload (Feishu datetime day filter) when supported by the table.
+- For explicit dates (`YYYY-MM-DD`), use `ExactDate` filter payload when the table Date column is a datetime type. If the column is plain text, use the literal date string.
 - Default status is `pending` when omitted.
 
 4) Call Feishu Bitable search.
@@ -157,8 +157,10 @@ export FEISHU_APP_SECRET=...
 export TASK_BITABLE_URL="https://.../base/APP_TOKEN?table=TABLE_ID"
 npx tsx scripts/bitable_derive.ts sync \
   --bitable-url "https://.../base/SOURCE_APP?table=SOURCE_TABLE" \
+  --task-url "https://.../base/TASK_APP?table=TASK_TABLE" \
   --app com.smile.gifmaker \
-  --extra 春节档专项
+  --extra 春节档专项 \
+  --skip-existing
 ```
 
 Fetch source table to JSONL (fields are simplified to raw values, not typed objects):
@@ -181,7 +183,7 @@ npx tsx scripts/bitable_derive.ts create \
 
 Notes:
 - `bitable_derive.ts create --skip-existing` skips when a task already exists for the same `App + Scene + Date + BookID`.
-- `bitable_task.ts fetch --date YYYY-MM-DD` uses `ExactDate` filtering when the task table Date field is a datetime type.
+- `bitable_task.ts fetch --date YYYY-MM-DD` uses `ExactDate` filtering when the task table Date field is a datetime type (text Date columns should use the literal date string).
 
 ## Resources
 
