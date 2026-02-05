@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import chalk from "chalk";
+import { Command } from "commander";
 
 const defaultTimeoutMs = 15_000;
 
@@ -63,6 +64,11 @@ function createLogger(json: boolean, level: LogLevel, stream: NodeJS.WriteStream
 }
 
 let logger = createLogger(false, "info", process.stderr, Boolean(process.stderr.isTTY));
+
+function setLoggerJSON(enabled: boolean) {
+  const useColor = Boolean(process.stderr.isTTY) && !enabled;
+  logger = createLogger(enabled, "info", process.stderr, useColor);
+}
 
 function hdcPrefix(serial: string) {
   return serial ? ["hdc", "-t", serial] : ["hdc"];
@@ -295,25 +301,11 @@ function printUsage(out: NodeJS.WriteStream) {
   out.write("  -t, -s <id>    device serial/id\n");
 }
 
-function parseGlobalFlags(args: string[]) {
-  let serial = "";
-  const rest: string[] = [];
-  for (let i = 0; i < args.length; i++) {
-    const arg = args[i];
-    if (arg === "-t" || arg === "-s") {
-      if (i + 1 < args.length) {
-        serial = args[i + 1];
-        i++;
-      }
-      continue;
-    }
-    if (arg.startsWith("-t=")) {
-      serial = arg.split("=")[1] ?? "";
-      continue;
-    }
-    rest.push(arg);
-  }
-  return { serial, rest };
+function getGlobalOptions(program: Command) {
+  const opts = program.opts<{ logJson?: boolean; serial?: string; target?: string }>();
+  setLoggerJSON(Boolean(opts.logJson));
+  const serial = String(opts.serial || opts.target || "");
+  return { serial };
 }
 
 function parseCommandFlags(args: string[]) {
@@ -356,31 +348,96 @@ function parseCommandFlags(args: string[]) {
 
 async function main() {
   const argv = process.argv.slice(2);
-  const global = parseGlobalFlags(argv);
-  const args = global.rest;
-  if (args.length === 0 || args[0] === "help" || args[0] === "-h" || args[0] === "--help") {
+  if (argv.length === 0 || argv[0] === "help" || argv[0] === "-h" || argv[0] === "--help") {
     printUsage(process.stdout);
     process.exit(0);
   }
-  const cmd = args[0];
-  const cmdArgs = args.slice(1);
-  switch (cmd) {
-    case "devices":
-      process.exit(cmdDevices(global.serial));
-    case "connect":
-      process.exit(cmdConnect(cmdArgs));
-    case "disconnect":
-      process.exit(cmdDisconnect(cmdArgs));
-    case "get-ip":
-      process.exit(cmdGetIP(global.serial));
-    case "shell":
-      process.exit(cmdShell(global.serial, cmdArgs));
-    case "tap":
-      process.exit(cmdTap(global.serial, cmdArgs));
-    case "double-tap":
-      process.exit(cmdDoubleTap(global.serial, cmdArgs));
-    case "swipe": {
-      const parsed = parseCommandFlags(cmdArgs);
+  const program = new Command();
+  let ran = false;
+  program
+    .name("hdc_helpers")
+    .description("HarmonyOS hdc helper CLI")
+    .helpOption(false)
+    .addHelpCommand(false)
+    .allowUnknownOption(true)
+    .passThroughOptions()
+    .option("--log-json", "Output logs in JSON")
+    .option("-t, --target <id>", "device serial/id")
+    .option("-s, --serial <id>", "device serial/id");
+
+  const getSerial = () => getGlobalOptions(program).serial;
+
+  program
+    .command("devices")
+    .allowUnknownOption(true)
+    .passThroughOptions()
+    .action(() => {
+      ran = true;
+      process.exit(cmdDevices(getSerial()));
+    });
+  program
+    .command("connect")
+    .allowUnknownOption(true)
+    .passThroughOptions()
+    .action((...args) => {
+      ran = true;
+      getGlobalOptions(program);
+      const cmd = args[args.length - 1];
+      process.exit(cmdConnect(cmd.args ?? []));
+    });
+  program
+    .command("disconnect")
+    .allowUnknownOption(true)
+    .passThroughOptions()
+    .action((...args) => {
+      ran = true;
+      getGlobalOptions(program);
+      const cmd = args[args.length - 1];
+      process.exit(cmdDisconnect(cmd.args ?? []));
+    });
+  program
+    .command("get-ip")
+    .allowUnknownOption(true)
+    .passThroughOptions()
+    .action(() => {
+      ran = true;
+      process.exit(cmdGetIP(getSerial()));
+    });
+  program
+    .command("shell")
+    .allowUnknownOption(true)
+    .passThroughOptions()
+    .action((...args) => {
+      ran = true;
+      const cmd = args[args.length - 1];
+      process.exit(cmdShell(getSerial(), cmd.args ?? []));
+    });
+  program
+    .command("tap")
+    .allowUnknownOption(true)
+    .passThroughOptions()
+    .action((...args) => {
+      ran = true;
+      const cmd = args[args.length - 1];
+      process.exit(cmdTap(getSerial(), cmd.args ?? []));
+    });
+  program
+    .command("double-tap")
+    .allowUnknownOption(true)
+    .passThroughOptions()
+    .action((...args) => {
+      ran = true;
+      const cmd = args[args.length - 1];
+      process.exit(cmdDoubleTap(getSerial(), cmd.args ?? []));
+    });
+  program
+    .command("swipe")
+    .allowUnknownOption(true)
+    .passThroughOptions()
+    .action((...args) => {
+      ran = true;
+      const cmd = args[args.length - 1];
+      const parsed = parseCommandFlags(cmd.args ?? []);
       if ("error" in parsed) {
         process.stderr.write(`${parsed.error}\n`);
         process.exit(2);
@@ -391,14 +448,34 @@ async function main() {
         process.exit(0);
       }
       const duration = parsed.flags?.["duration-ms"] ? Number(parsed.flags["duration-ms"]) : -1;
-      process.exit(cmdSwipe(global.serial, parsed.rest ?? [], Number.isFinite(duration) ? duration : -1));
-    }
-    case "keyevent":
-      process.exit(cmdKeyEvent(global.serial, cmdArgs));
-    case "text":
-      process.exit(cmdText(global.serial, cmdArgs));
-    case "screenshot": {
-      const parsed = parseCommandFlags(cmdArgs);
+      process.exit(cmdSwipe(getSerial(), parsed.rest ?? [], Number.isFinite(duration) ? duration : -1));
+    });
+  program
+    .command("keyevent")
+    .allowUnknownOption(true)
+    .passThroughOptions()
+    .action((...args) => {
+      ran = true;
+      const cmd = args[args.length - 1];
+      process.exit(cmdKeyEvent(getSerial(), cmd.args ?? []));
+    });
+  program
+    .command("text")
+    .allowUnknownOption(true)
+    .passThroughOptions()
+    .action((...args) => {
+      ran = true;
+      const cmd = args[args.length - 1];
+      process.exit(cmdText(getSerial(), cmd.args ?? []));
+    });
+  program
+    .command("screenshot")
+    .allowUnknownOption(true)
+    .passThroughOptions()
+    .action((...args) => {
+      ran = true;
+      const cmd = args[args.length - 1];
+      const parsed = parseCommandFlags(cmd.args ?? []);
       if ("error" in parsed) {
         process.stderr.write(`${parsed.error}\n`);
         process.exit(2);
@@ -408,18 +485,46 @@ async function main() {
         process.stdout.write("Flags:\n  --out <path>    output path\n");
         process.exit(0);
       }
-      process.exit(cmdScreenshot(global.serial, String(parsed.flags?.out || "")));
-    }
-    case "launch":
-      process.exit(cmdLaunch(global.serial, cmdArgs));
-    case "force-stop":
-      process.exit(cmdForceStop(global.serial, cmdArgs));
-    case "get-current-app":
-      process.exit(cmdGetCurrentApp(global.serial));
-    default:
-      process.stderr.write(`Unknown command: ${cmd}\n`);
-      printUsage(process.stdout);
-      process.exit(2);
+      process.exit(cmdScreenshot(getSerial(), String(parsed.flags?.out || "")));
+    });
+  program
+    .command("launch")
+    .allowUnknownOption(true)
+    .passThroughOptions()
+    .action((...args) => {
+      ran = true;
+      const cmd = args[args.length - 1];
+      process.exit(cmdLaunch(getSerial(), cmd.args ?? []));
+    });
+  program
+    .command("force-stop")
+    .allowUnknownOption(true)
+    .passThroughOptions()
+    .action((...args) => {
+      ran = true;
+      const cmd = args[args.length - 1];
+      process.exit(cmdForceStop(getSerial(), cmd.args ?? []));
+    });
+  program
+    .command("get-current-app")
+    .allowUnknownOption(true)
+    .passThroughOptions()
+    .action(() => {
+      ran = true;
+      process.exit(cmdGetCurrentApp(getSerial()));
+    });
+
+  program.on("command:*", (operands) => {
+    getGlobalOptions(program);
+    process.stderr.write(`Unknown command: ${operands[0]}\n`);
+    printUsage(process.stdout);
+    process.exit(2);
+  });
+
+  await program.parseAsync(process.argv);
+  if (!ran) {
+    printUsage(process.stdout);
+    process.exit(0);
   }
 }
 

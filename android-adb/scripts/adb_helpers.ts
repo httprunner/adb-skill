@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import chalk from "chalk";
+import { Command } from "commander";
 
 const defaultTimeoutMs = 10_000;
 
@@ -532,32 +533,10 @@ function printUsage(out: NodeJS.WriteStream) {
   out.write("  --log-json           Output logs in JSON\n");
 }
 
-function parseGlobalFlags(args: string[]) {
-  let serial = "";
-  let logJson = false;
-  const rest: string[] = [];
-  for (let i = 0; i < args.length; i++) {
-    const arg = args[i];
-    if (arg === "--log-json" || arg.startsWith("--log-json=")) {
-      const raw = arg.includes("=") ? arg.split("=", 2)[1] : "true";
-      const lowered = raw.trim().toLowerCase();
-      logJson = !(lowered === "false" || lowered === "0" || lowered === "no");
-      continue;
-    }
-    if (arg === "-s" || arg === "--serial") {
-      if (i + 1 < args.length) {
-        serial = args[i + 1];
-        i++;
-      }
-      continue;
-    }
-    if (arg.startsWith("--serial=")) {
-      serial = arg.split("=", 2)[1] ?? "";
-      continue;
-    }
-    rest.push(arg);
-  }
-  return { serial, logJson, rest };
+function getGlobalOptions(program: Command) {
+  const opts = program.opts<{ logJson?: boolean; serial?: string }>();
+  setLoggerJSON(Boolean(opts.logJson));
+  return { serial: String(opts.serial || "") };
 }
 
 function parseCommandFlags(args: string[]) {
@@ -608,38 +587,122 @@ function parseCommandFlags(args: string[]) {
 
 async function main() {
   const argv = process.argv.slice(2);
-  const global = parseGlobalFlags(argv);
-  setLoggerJSON(global.logJson);
-  const args = global.rest;
-  if (args.length === 0 || args[0] === "help" || args[0] === "-h" || args[0] === "--help") {
+  if (argv.length === 0 || argv[0] === "help" || argv[0] === "-h" || argv[0] === "--help") {
     printUsage(process.stdout);
     process.exit(0);
   }
-  const cmd = args[0];
-  const cmdArgs = args.slice(1);
-  switch (cmd) {
-    case "devices":
-      process.exit(cmdDevices(global.serial));
-    case "start-server":
+  const program = new Command();
+  let ran = false;
+  program
+    .name("adb_helpers")
+    .description("Android adb helper CLI")
+    .helpOption(false)
+    .addHelpCommand(false)
+    .allowUnknownOption(true)
+    .passThroughOptions()
+    .option("--log-json", "Output logs in JSON")
+    .option("-s, --serial <id>", "device serial");
+
+  const getSerial = () => getGlobalOptions(program).serial;
+
+  program
+    .command("devices")
+    .allowUnknownOption(true)
+    .passThroughOptions()
+    .action(() => {
+      ran = true;
+      process.exit(cmdDevices(getSerial()));
+    });
+  program
+    .command("start-server")
+    .allowUnknownOption(true)
+    .passThroughOptions()
+    .action(() => {
+      ran = true;
+      getGlobalOptions(program);
       process.exit(cmdStartServer());
-    case "kill-server":
+    });
+  program
+    .command("kill-server")
+    .allowUnknownOption(true)
+    .passThroughOptions()
+    .action(() => {
+      ran = true;
+      getGlobalOptions(program);
       process.exit(cmdKillServer());
-    case "connect":
-      process.exit(cmdConnect(cmdArgs));
-    case "disconnect":
-      process.exit(cmdDisconnect(cmdArgs));
-    case "get-ip":
-      process.exit(cmdGetIP(global.serial));
-    case "enable-tcpip":
-      process.exit(cmdEnableTCPIP(global.serial, cmdArgs));
-    case "shell":
-      process.exit(cmdShell(global.serial, cmdArgs));
-    case "tap":
-      process.exit(cmdTap(global.serial, cmdArgs));
-    case "double-tap":
-      process.exit(cmdDoubleTap(global.serial, cmdArgs));
-    case "swipe": {
-      const parsed = parseCommandFlags(cmdArgs);
+    });
+  program
+    .command("connect")
+    .allowUnknownOption(true)
+    .passThroughOptions()
+    .action((...args) => {
+      ran = true;
+      getGlobalOptions(program);
+      const cmd = args[args.length - 1];
+      process.exit(cmdConnect(cmd.args ?? []));
+    });
+  program
+    .command("disconnect")
+    .allowUnknownOption(true)
+    .passThroughOptions()
+    .action((...args) => {
+      ran = true;
+      getGlobalOptions(program);
+      const cmd = args[args.length - 1];
+      process.exit(cmdDisconnect(cmd.args ?? []));
+    });
+  program
+    .command("get-ip")
+    .allowUnknownOption(true)
+    .passThroughOptions()
+    .action(() => {
+      ran = true;
+      process.exit(cmdGetIP(getSerial()));
+    });
+  program
+    .command("enable-tcpip")
+    .allowUnknownOption(true)
+    .passThroughOptions()
+    .action((...args) => {
+      ran = true;
+      const cmd = args[args.length - 1];
+      process.exit(cmdEnableTCPIP(getSerial(), cmd.args ?? []));
+    });
+  program
+    .command("shell")
+    .allowUnknownOption(true)
+    .passThroughOptions()
+    .action((...args) => {
+      ran = true;
+      const cmd = args[args.length - 1];
+      process.exit(cmdShell(getSerial(), cmd.args ?? []));
+    });
+  program
+    .command("tap")
+    .allowUnknownOption(true)
+    .passThroughOptions()
+    .action((...args) => {
+      ran = true;
+      const cmd = args[args.length - 1];
+      process.exit(cmdTap(getSerial(), cmd.args ?? []));
+    });
+  program
+    .command("double-tap")
+    .allowUnknownOption(true)
+    .passThroughOptions()
+    .action((...args) => {
+      ran = true;
+      const cmd = args[args.length - 1];
+      process.exit(cmdDoubleTap(getSerial(), cmd.args ?? []));
+    });
+  program
+    .command("swipe")
+    .allowUnknownOption(true)
+    .passThroughOptions()
+    .action((...args) => {
+      ran = true;
+      const cmd = args[args.length - 1];
+      const parsed = parseCommandFlags(cmd.args ?? []);
       if ("error" in parsed) {
         logger.error(parsed.error as string);
         process.exit(2);
@@ -650,10 +713,16 @@ async function main() {
         process.exit(0);
       }
       const duration = parsed.flags?.["duration-ms"] ? Number(parsed.flags["duration-ms"]) : -1;
-      process.exit(cmdSwipe(global.serial, parsed.rest ?? [], Number.isFinite(duration) ? duration : -1));
-    }
-    case "long-press": {
-      const parsed = parseCommandFlags(cmdArgs);
+      process.exit(cmdSwipe(getSerial(), parsed.rest ?? [], Number.isFinite(duration) ? duration : -1));
+    });
+  program
+    .command("long-press")
+    .allowUnknownOption(true)
+    .passThroughOptions()
+    .action((...args) => {
+      ran = true;
+      const cmd = args[args.length - 1];
+      const parsed = parseCommandFlags(cmd.args ?? []);
       if ("error" in parsed) {
         logger.error(parsed.error as string);
         process.exit(2);
@@ -664,12 +733,25 @@ async function main() {
         process.exit(0);
       }
       const duration = parsed.flags?.["duration-ms"] ? Number(parsed.flags["duration-ms"]) : 3000;
-      process.exit(cmdLongPress(global.serial, parsed.rest ?? [], Number.isFinite(duration) ? duration : 3000));
-    }
-    case "keyevent":
-      process.exit(cmdKeyEvent(global.serial, cmdArgs));
-    case "text": {
-      const parsed = parseCommandFlags(cmdArgs);
+      process.exit(cmdLongPress(getSerial(), parsed.rest ?? [], Number.isFinite(duration) ? duration : 3000));
+    });
+  program
+    .command("keyevent")
+    .allowUnknownOption(true)
+    .passThroughOptions()
+    .action((...args) => {
+      ran = true;
+      const cmd = args[args.length - 1];
+      process.exit(cmdKeyEvent(getSerial(), cmd.args ?? []));
+    });
+  program
+    .command("text")
+    .allowUnknownOption(true)
+    .passThroughOptions()
+    .action((...args) => {
+      ran = true;
+      const cmd = args[args.length - 1];
+      const parsed = parseCommandFlags(cmd.args ?? []);
       if ("error" in parsed) {
         logger.error(parsed.error as string);
         process.exit(2);
@@ -679,12 +761,24 @@ async function main() {
         process.stdout.write("Flags:\n  --adb-keyboard    use ADB Keyboard broadcast\n");
         process.exit(0);
       }
-      process.exit(cmdText(global.serial, parsed.rest ?? [], Boolean(parsed.flags?.["adb-keyboard"])));
-    }
-    case "clear-text":
-      process.exit(cmdClearText(global.serial));
-    case "screenshot": {
-      const parsed = parseCommandFlags(cmdArgs);
+      process.exit(cmdText(getSerial(), parsed.rest ?? [], Boolean(parsed.flags?.["adb-keyboard"])));
+    });
+  program
+    .command("clear-text")
+    .allowUnknownOption(true)
+    .passThroughOptions()
+    .action(() => {
+      ran = true;
+      process.exit(cmdClearText(getSerial()));
+    });
+  program
+    .command("screenshot")
+    .allowUnknownOption(true)
+    .passThroughOptions()
+    .action((...args) => {
+      ran = true;
+      const cmd = args[args.length - 1];
+      const parsed = parseCommandFlags(cmd.args ?? []);
       if ("error" in parsed) {
         logger.error(parsed.error as string);
         process.exit(2);
@@ -694,16 +788,42 @@ async function main() {
         process.stdout.write("Flags:\n  --out <path>    output path\n");
         process.exit(0);
       }
-      process.exit(cmdScreenshot(global.serial, String(parsed.flags?.out || "")));
-    }
-    case "launch":
-      process.exit(cmdLaunch(global.serial, cmdArgs));
-    case "get-current-app":
-      process.exit(cmdGetCurrentApp(global.serial));
-    case "force-stop":
-      process.exit(cmdForceStop(global.serial, cmdArgs));
-    case "dump-ui": {
-      const parsed = parseCommandFlags(cmdArgs);
+      process.exit(cmdScreenshot(getSerial(), String(parsed.flags?.out || "")));
+    });
+  program
+    .command("launch")
+    .allowUnknownOption(true)
+    .passThroughOptions()
+    .action((...args) => {
+      ran = true;
+      const cmd = args[args.length - 1];
+      process.exit(cmdLaunch(getSerial(), cmd.args ?? []));
+    });
+  program
+    .command("get-current-app")
+    .allowUnknownOption(true)
+    .passThroughOptions()
+    .action(() => {
+      ran = true;
+      process.exit(cmdGetCurrentApp(getSerial()));
+    });
+  program
+    .command("force-stop")
+    .allowUnknownOption(true)
+    .passThroughOptions()
+    .action((...args) => {
+      ran = true;
+      const cmd = args[args.length - 1];
+      process.exit(cmdForceStop(getSerial(), cmd.args ?? []));
+    });
+  program
+    .command("dump-ui")
+    .allowUnknownOption(true)
+    .passThroughOptions()
+    .action((...args) => {
+      ran = true;
+      const cmd = args[args.length - 1];
+      const parsed = parseCommandFlags(cmd.args ?? []);
       if ("error" in parsed) {
         logger.error(parsed.error as string);
         process.exit(2);
@@ -713,14 +833,28 @@ async function main() {
         process.stdout.write("Flags:\n  --out <path>    output path\n  --parse         parse UI hierarchy\n");
         process.exit(0);
       }
-      process.exit(cmdDumpUI(global.serial, String(parsed.flags?.out || ""), Boolean(parsed.flags?.parse)));
-    }
-    case "wm-size":
-      process.exit(cmdWmSize(global.serial));
-    default:
-      logger.error("unknown command", { command: cmd });
-      printUsage(process.stdout);
-      process.exit(2);
+      process.exit(cmdDumpUI(getSerial(), String(parsed.flags?.out || ""), Boolean(parsed.flags?.parse)));
+    });
+  program
+    .command("wm-size")
+    .allowUnknownOption(true)
+    .passThroughOptions()
+    .action(() => {
+      ran = true;
+      process.exit(cmdWmSize(getSerial()));
+    });
+
+  program.on("command:*", (operands) => {
+    getGlobalOptions(program);
+    logger.error("unknown command", { command: operands[0] });
+    printUsage(process.stdout);
+    process.exit(2);
+  });
+
+  await program.parseAsync(process.argv);
+  if (!ran) {
+    printUsage(process.stdout);
+    process.exit(0);
   }
 }
 
