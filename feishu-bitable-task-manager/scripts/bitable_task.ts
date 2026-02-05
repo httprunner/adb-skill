@@ -127,6 +127,14 @@ type Task = {
   raw_fields?: any;
 };
 
+function resolveExactDateMs(day: string) {
+  const trimmed = (day || "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return "";
+  const ms = Date.parse(`${trimmed}T00:00:00`);
+  if (Number.isNaN(ms)) return "";
+  return String(ms);
+}
+
 function buildFilter(fields: Record<string, string>, app: string, scene: string, status: string, datePreset: string) {
   const conds: any[] = [];
   const add = (fieldKey: string, value: string) => {
@@ -137,7 +145,15 @@ function buildFilter(fields: Record<string, string>, app: string, scene: string,
   add("App", app);
   add("Scene", scene);
   add("Status", status);
-  if (datePreset && datePreset !== "Any") add("Date", datePreset);
+  if (datePreset && datePreset !== "Any") {
+    const ms = resolveExactDateMs(datePreset);
+    if (ms) {
+      const name = (fields["Date"] || "").trim();
+      if (name) conds.push({ field_name: name, operator: "is", value: ["ExactDate", ms] });
+    } else {
+      add("Date", datePreset);
+    }
+  }
   if (!conds.length) return null;
   return { conjunction: "and", conditions: conds };
 }
