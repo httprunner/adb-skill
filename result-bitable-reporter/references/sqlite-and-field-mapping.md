@@ -73,18 +73,6 @@ Stop one device collector and print collected delta:
 SerialNumber=1fa20bb npx tsx scripts/result_reporter.ts collect-stop
 ```
 
-Fast return (lower settle wait):
-
-```bash
-SerialNumber=1fa20bb npx tsx scripts/result_reporter.ts collect-stop --wait-ms 3000 --stable-ms 800
-```
-
-Safer settle (higher wait, better for delayed sqlite flush):
-
-```bash
-SerialNumber=1fa20bb npx tsx scripts/result_reporter.ts collect-stop --wait-ms 15000 --stable-ms 3000
-```
-
 Inspect one pending/failed row:
 
 ```bash

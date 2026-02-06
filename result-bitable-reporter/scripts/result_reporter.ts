@@ -81,8 +81,6 @@ type CollectOptions = {
 
 type CollectStopOptions = {
   serial?: string;
-  waitMs?: string;
-  stableMs?: string;
 };
 
 type CollectState = {
@@ -503,18 +501,6 @@ async function stopCollectorsForSerial(serial: string, statePID?: number): Promi
     await stopCollectorProcess(pid);
   }
   clearCollectState(serial);
-}
-
-function parsePositiveInt(name: string, raw: string | undefined, defaultValue: number): number {
-  const value = raw?.trim();
-  if (!value) {
-    return defaultValue;
-  }
-  const parsed = Number(value);
-  if (!Number.isInteger(parsed) || parsed <= 0) {
-    throw new Error(`invalid ${name}: ${raw}`);
-  }
-  return parsed;
 }
 
 async function waitForCountStable(
@@ -982,17 +968,10 @@ program
   .command("collect-stop")
   .description("Stop background evalpkgs collector for one device and print collection delta")
   .option("--serial <value>", "Device serial (default from SerialNumber env)")
-  .option("--wait-ms <n>", "Max wait milliseconds for sqlite count settling", "8000")
-  .option("--stable-ms <n>", "Required unchanged milliseconds before concluding count settled", "1500")
   .action(async (cmd: CollectStopOptions) => {
     const serial = cmd.serial?.trim() || process.env.SerialNumber?.trim();
     if (!serial) {
       throw new Error("--serial is required (or set SerialNumber env)");
-    }
-    const waitMs = parsePositiveInt("--wait-ms", cmd.waitMs, 8000);
-    const stableMs = parsePositiveInt("--stable-ms", cmd.stableMs, 1500);
-    if (stableMs > waitMs) {
-      throw new Error("--stable-ms must be <= --wait-ms");
     }
     const state = readCollectState(serial);
     if (!state) {
@@ -1005,7 +984,7 @@ program
       await stopCollectorProcess(state.pid);
       stopped = true;
     }
-    const countAfter = await waitForCountStable(state.dbPath, state.table, waitMs, stableMs);
+    const countAfter = await waitForCountStable(state.dbPath, state.table);
     const delta = countAfter - state.countBefore;
     const taskDelta = countRowsByTaskAfterID(state.dbPath, state.table, state.taskID, state.maxIDBefore);
     const jsonlLines = countJSONLLinesSince(state.artifactDir, state.startedAt);

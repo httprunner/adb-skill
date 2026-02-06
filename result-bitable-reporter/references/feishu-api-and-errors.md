@@ -48,6 +48,39 @@ Skill default:
 3. Inspect sqlite `report_error` values and repair mapping/env.
 4. Run `retry-reset`, then retry `report`.
 
+## Field Mapping Env Overrides
+
+Default Feishu field names come from sqlite capture columns and can be overridden:
+
+- `RESULT_FIELD_DATETIME` (default `Datetime`)
+- `RESULT_FIELD_DEVICE_SERIAL` (default `DeviceSerial`)
+- `RESULT_FIELD_APP` (default `App`)
+- `RESULT_FIELD_SCENE` (default `Scene`)
+- `RESULT_FIELD_PARAMS` (default `Params`)
+- `RESULT_FIELD_ITEMID` (default `ItemID`)
+- `RESULT_FIELD_ITEMCAPTION` (default `ItemCaption`)
+- `RESULT_FIELD_ITEMCDNURL` (default `ItemCDNURL`)
+- `RESULT_FIELD_ITEMURL` (default `ItemURL`)
+- `RESULT_FIELD_DURATION` (default `ItemDuration`)
+- `RESULT_FIELD_USERNAME` (default `UserName`)
+- `RESULT_FIELD_USERID` (default `UserID`)
+- `RESULT_FIELD_USERALIAS` (default `UserAlias`)
+- `RESULT_FIELD_USERAUTHENTITY` (default `UserAuthEntity`)
+- `RESULT_FIELD_TAGS` (default `Tags`)
+- `RESULT_FIELD_TASKID` (default `TaskID`)
+- `RESULT_FIELD_EXTRA` (default `Extra`)
+- `RESULT_FIELD_LIKECOUNT` (default `LikeCount`)
+- `RESULT_FIELD_VIEWCOUNT` (default `ViewCount`)
+- `RESULT_FIELD_ANCHORPOINT` (default `AnchorPoint`)
+- `RESULT_FIELD_COMMENTCOUNT` (default `CommentCount`)
+- `RESULT_FIELD_COLLECTCOUNT` (default `CollectCount`)
+- `RESULT_FIELD_FORWARDCOUNT` (default `ForwardCount`)
+- `RESULT_FIELD_SHARECOUNT` (default `ShareCount`)
+- `RESULT_FIELD_PAYMODE` (default `PayMode`)
+- `RESULT_FIELD_COLLECTION` (default `Collection`)
+- `RESULT_FIELD_EPISODE` (default `Episode`)
+- `RESULT_FIELD_PUBLISHTIME` (default `PublishTime`)
+
 ## Command Examples
 
 Report pending/failed rows to Feishu:
