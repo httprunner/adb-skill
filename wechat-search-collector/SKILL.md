@@ -13,9 +13,10 @@ description: 微信视频号搜索与结果遍历的自动化采集流程（Andr
 - 截图与相关产物输出目录由 `TASK_ID` 控制：若指定 `TASK_ID` 则写入 `~/.eval/<TASK_ID>/`，未指定则写入 `~/.eval/debug/`。文件名带时间戳避免覆盖。
 - 具体命令已抽离到 `references/commands.md`，流程中只描述关键步骤。
 - 如需从飞书多维表格拉取搜索任务，使用 `feishu-bitable-task-manager` 获取任务参数后再进入对应流程。
+- 结果采集与上报使用 `result-bitable-reporter`：前置必须启动 `collect`，收尾必须执行 `collect-stop` 与 `report`。
 
 ## 前置处理
-- 设备预检：确认驱动与依赖可用，读取环境变量 `DEVICE_SERIAL` 获取设备 serial。
+- 设备预检：确认驱动与依赖可用，读取环境变量 `SerialNumber` 获取设备 serial。
 - 任务拉取：
   - 当需要“从任务表获取搜索任务并执行”时，先用 `feishu-bitable-task-manager` 的 `claim` 获取任务，将任务字段映射到本技能的参数。
   - `claim` 默认拉取 `Date=Today` 且 status 为 `pending,failed` 的任务，并保证多节点多设备不会重复领取相同任务。
@@ -28,6 +29,10 @@ description: 微信视频号搜索与结果遍历的自动化采集流程（Andr
     - `综合页搜索` -> 综合页搜索流程
     - `个人页搜索` -> 个人页搜索流程
 - 目录初始化：必须提供 `TASK_ID`，创建输出目录 `~/.eval/<TASK_ID>/`；若缺失则失败结束。
+- 启动采集：
+  - 在进入微信搜索流程前，调用 `result-bitable-reporter` 的 `collect` 启动后台采集。
+  - 环境变量要求：`BUNDLE_ID`、`SerialNumber`。
+  - 参数要求：`--task-id <TASK_ID>`、`--db-path ~/.eval/records.sqlite`、`--table capture_results`。
 
 ## 综合页搜索流程
 适用于“在视频号综合页搜索单个或多个关键词并遍历结果”的需求。
@@ -88,6 +93,9 @@ description: 微信视频号搜索与结果遍历的自动化采集流程（Andr
 ## 任务结束后的收尾逻辑
 - 若 `claim` 未获取任务，直接结束不做收尾。
 - 所有关键词遍历完成后，使用 `android-adb` 的 `back-home` 命令返回手机桌面
+- 无论任务成功、失败或中断，都必须执行以下动作（finally 语义）：
+  - 调用 `result-bitable-reporter` 的 `collect-stop` 结束当前设备采集，并打印采集统计。
+  - 调用 `result-bitable-reporter` 的 `report`，将 `capture_results` 中 `reported in (0,-1)` 的数据上报至飞书多维表格采集结果表。
 - 调用 `feishu-bitable-task-manager` 更新该 `TaskID` 的字段：`Status` -> `success/failed`（基于任务执行结果）、`EndAt` ->`now`
 
 ## 备注与排障
