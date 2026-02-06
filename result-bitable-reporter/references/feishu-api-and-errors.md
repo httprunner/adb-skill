@@ -47,3 +47,41 @@ Skill default:
 2. Confirm result table URL and field names.
 3. Inspect sqlite `report_error` values and repair mapping/env.
 4. Run `retry-reset`, then retry `report`.
+
+## Command Examples
+
+Report pending/failed rows to Feishu:
+
+```bash
+export FEISHU_APP_ID=...
+export FEISHU_APP_SECRET=...
+export RESULT_BITABLE_URL="https://.../wiki/...?...table=tbl_xxx&view=vew_xxx"
+npx tsx scripts/result_reporter.ts report \
+  --db-path ~/.eval/records.sqlite \
+  --table capture_results \
+  --status 0,-1 \
+  --batch-size 30 \
+  --limit 100
+```
+
+Dry-run without Feishu write:
+
+```bash
+npx tsx scripts/result_reporter.ts report \
+  --dry-run \
+  --status 0,-1 \
+  --limit 10
+```
+
+Reset failed rows and retry:
+
+```bash
+npx tsx scripts/result_reporter.ts retry-reset \
+  --db-path ~/.eval/records.sqlite \
+  --table capture_results
+
+npx tsx scripts/result_reporter.ts report \
+  --status 0,-1 \
+  --batch-size 30 \
+  --limit 100
+```

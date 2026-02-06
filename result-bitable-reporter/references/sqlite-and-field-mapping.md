@@ -4,6 +4,7 @@
 
 - DB path default: `$HOME/.eval/records.sqlite`
 - Table default: `capture_results`
+- `collect` mode also writes to the same shared sqlite path unless `--db-path` overrides it.
 - Override via env:
   - `TRACKING_STORAGE_DB_PATH`
   - `RESULT_SQLITE_TABLE`
@@ -38,22 +39,60 @@ Default query picks rows where:
 
 Optional filters can narrow selection by app/scene/params/item/date/custom SQL predicate.
 
+## Collect Mode Validation
+
+`collect` performs a non-writeback validation around `capture_results`:
+
+- query row count before starting eval collection
+- run eval collection in foreground
+- query row count after exit
+- print `delta = after - before`
+
+`collect` does not update `reported/reported_at/report_error`; those fields remain managed by `report` and `retry-reset`.
+
+## Command Examples
+
+Run real-time collection (foreground, stop with `Ctrl+C`):
+
+```bash
+export BUNDLE_ID=com.tencent.mm
+export SerialNumber=1fa20bb
+npx tsx scripts/result_reporter.ts collect \
+  --task-id 20260206001 \
+  --db-path ~/.eval/records.sqlite \
+  --table capture_results
+```
+
+Inspect one pending/failed row:
+
+```bash
+npx tsx scripts/result_reporter.ts filter \
+  --db-path ~/.eval/records.sqlite \
+  --table capture_results \
+  --status 0,-1 \
+  --limit 1
+```
+
+Inspect by app + scene:
+
+```bash
+npx tsx scripts/result_reporter.ts filter \
+  --app com.tencent.mm \
+  --scene onSearch \
+  --status 0,-1 \
+  --limit 20
+```
+
 ## Retry Operations
 
 Reset failed rows for re-upload:
 
-```sql
-UPDATE capture_results
-SET reported = 0, reported_at = NULL, report_error = NULL
-WHERE reported = -1;
+```bash
+sqlite3 ~/.eval/records.sqlite "UPDATE capture_results SET reported = 0, reported_at = NULL, report_error = NULL WHERE reported = -1;"
 ```
 
 Inspect latest failures:
 
-```sql
-SELECT id, TaskID, Params, report_error, reported_at
-FROM capture_results
-WHERE reported = -1
-ORDER BY reported_at DESC
-LIMIT 20;
+```bash
+sqlite3 ~/.eval/records.sqlite "SELECT id, TaskID, Params, report_error, reported_at FROM capture_results WHERE reported = -1 ORDER BY reported_at DESC LIMIT 20;"
 ```

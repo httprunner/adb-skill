@@ -1,6 +1,6 @@
 ---
 name: result-bitable-reporter
-description: "Filter capture results from SQLite and report them to a Feishu Bitable result table. Use when workflows need to select pending/failed rows, upload to Feishu result tables, and update reported/reported_at/report_error for retry-safe pipelines."
+description: "Run real-time eval collection and result reporting workflows with SQLite + Feishu Bitable. Use this skill when you need to (1) collect app event results via evalpkgs with TaskID-scoped artifacts, (2) filter pending/failed rows from capture_results, (3) report rows to a Feishu result table, and (4) reset or update reported/reported_at/report_error for retry-safe pipelines."
 ---
 
 # Result Bitable Reporter
@@ -14,16 +14,23 @@ Use this skill to run an explicit SQLite -> Feishu result reporting pipeline.
 - Optional: `FEISHU_BASE_URL` (default `https://open.feishu.cn`).
 - Optional SQLite knobs: `TRACKING_STORAGE_DB_PATH`, `RESULT_SQLITE_TABLE`.
 
-2) Preview rows before upload.
+2) (Optional) Run real-time collection into shared sqlite.
+- Use `collect` to start `evalpkgs run --log-level debug` in foreground.
+- Require env: `BUNDLE_ID`, `SerialNumber`.
+- Require `--task-id`; the command injects `TaskID=<task-id>` into evalpkgs.
+- `collect` checks sqlite row delta in `capture_results` before/after exit.
+- `collect` strictly requires new/updated files under `~/.eval/<TaskID>/`; otherwise it fails with a capability error.
+
+3) Preview rows before upload.
 - Use `filter` first to confirm selected rows.
 - Default selection: `reported IN (0, -1)`.
 
-3) Run batch report and writeback.
+4) Run batch report and writeback.
 - Use `report` to fetch rows from sqlite, batch-create Feishu records, and update sqlite status.
 - Success writeback: `reported=1`, `reported_at=now_ms`, `report_error=NULL`.
 - Failure writeback: `reported=-1`, `reported_at=now_ms`, `report_error=<error (<=512 chars)>`.
 
-4) Retry failed rows.
+5) Retry failed rows.
 - Use `retry-reset` to reset failed rows: `reported=-1 -> 0`.
 - Re-run `report` with the same filters.
 
@@ -36,6 +43,20 @@ npx tsx scripts/result_reporter.ts <subcommand> [flags]
 ```
 
 ## Commands
+
+### collect
+Run eval collection in foreground and verify `capture_results` increment.
+
+```bash
+export BUNDLE_ID=com.tencent.mm
+export SerialNumber=1fa20bb
+npx tsx scripts/result_reporter.ts collect \
+  --task-id 20260206001 \
+  --db-path ~/.eval/records.sqlite \
+  --table capture_results
+```
+
+Stop with `Ctrl+C`. The command prints `before_count`, `after_count`, and `delta`.
 
 ### filter
 Print selected sqlite rows as JSONL.
@@ -125,6 +146,6 @@ Payload field names default to the standard result-table field set and can be ov
 
 ## Resources
 
-- `scripts/result_reporter.ts`: CLI entrypoint for filter/report/retry-reset.
+- `scripts/result_reporter.ts`: CLI entrypoint for collect/filter/report/retry-reset.
 - `references/sqlite-and-field-mapping.md`: sqlite schema and writeback semantics.
 - `references/feishu-api-and-errors.md`: Feishu APIs and common failure handling.

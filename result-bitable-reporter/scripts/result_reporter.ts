@@ -1,6 +1,7 @@
 #!/usr/bin/env -S npx tsx
 
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
+import { existsSync, mkdirSync, readdirSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { URL } from "node:url";
@@ -70,6 +71,12 @@ type RetryResetOptions = {
   table: string;
   app?: string;
   scene?: string;
+};
+
+type CollectOptions = {
+  dbPath?: string;
+  table?: string;
+  taskId?: string;
 };
 
 type ResultFieldNames = {
@@ -288,6 +295,113 @@ ${whereSQL}
 ORDER BY id ASC
 LIMIT ${opts.limit};`;
   return runSQLiteJSON<CaptureRow[]>(opts.dbPath, sql);
+}
+
+function countRows(dbPath: string, table: string): number {
+  const qTable = quoteIdent(table);
+  const rows = runSQLiteJSON<Array<{ count: number | string }>>(dbPath, `SELECT COUNT(*) AS count FROM ${qTable};`);
+  const value = rows[0]?.count ?? 0;
+  const count = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(count) ? count : 0;
+}
+
+type ArtifactSnapshot = Map<string, string>;
+
+function validateTaskID(taskID: string): string {
+  const trimmed = taskID.trim();
+  if (trimmed === "") {
+    throw new Error("--task-id is required");
+  }
+  if (!/^[A-Za-z0-9._-]+$/.test(trimmed)) {
+    throw new Error(`invalid --task-id: ${taskID}; only [A-Za-z0-9._-] are allowed`);
+  }
+  return trimmed;
+}
+
+function taskArtifactDir(taskID: string): string {
+  return join(homedir(), ".eval", taskID);
+}
+
+function snapshotArtifacts(dir: string): ArtifactSnapshot {
+  const snapshot: ArtifactSnapshot = new Map();
+  if (!existsSync(dir)) {
+    return snapshot;
+  }
+  const stack = [dir];
+  while (stack.length > 0) {
+    const current = stack.pop() as string;
+    const entries = readdirSync(current, { withFileTypes: true });
+    for (const entry of entries) {
+      const fullPath = join(current, entry.name);
+      if (entry.isDirectory()) {
+        stack.push(fullPath);
+        continue;
+      }
+      if (!entry.isFile()) {
+        continue;
+      }
+      const st = statSync(fullPath);
+      const sig = `${Math.floor(st.mtimeMs)}:${st.size}`;
+      snapshot.set(fullPath, sig);
+    }
+  }
+  return snapshot;
+}
+
+function hasArtifactDelta(before: ArtifactSnapshot, after: ArtifactSnapshot): boolean {
+  for (const [path, sig] of after) {
+    if (!before.has(path)) {
+      return true;
+    }
+    if (before.get(path) !== sig) {
+      return true;
+    }
+  }
+  return false;
+}
+
+async function runEvalpkgsCollect(
+  taskID: string,
+  onInterrupt?: (signal: NodeJS.Signals) => void,
+): Promise<{ code: number | null; signal: NodeJS.Signals | null; interrupted: boolean }> {
+  let interrupted = false;
+  const child = spawn("evalpkgs", ["run", "--log-level", "debug"], {
+    stdio: "inherit",
+    env: {
+      ...process.env,
+      TaskID: taskID,
+    },
+  });
+
+  const interrupt = (signal: NodeJS.Signals) => {
+    if (!interrupted) {
+      interrupted = true;
+      onInterrupt?.(signal);
+    }
+    if (!child.killed) {
+      child.kill(signal);
+    }
+  };
+  const onSigInt = () => interrupt("SIGINT");
+  const onSigTerm = () => interrupt("SIGTERM");
+
+  process.on("SIGINT", onSigInt);
+  process.on("SIGTERM", onSigTerm);
+
+  try {
+    const result = await new Promise<{ code: number | null; signal: NodeJS.Signals | null }>((resolve, reject) => {
+      child.on("error", (err) => {
+        reject(new Error(`failed to launch evalpkgs: ${err.message}`));
+      });
+      child.on("exit", (code, signal) => {
+        resolve({ code, signal });
+      });
+    });
+    return { ...result, interrupted };
+  } finally {
+    process.off("SIGINT", onSigInt);
+    process.off("SIGTERM", onSigTerm);
+  }
 }
 
 function truncateError(err: unknown): string {
@@ -591,6 +705,75 @@ function buildFilterOptions(cmd: {
     whereArgs: (cmd.whereArg ?? []).map((x) => x.trim()),
   };
 }
+
+program
+  .command("collect")
+  .description("Run evalpkgs real-time collection and verify capture_results increment")
+  .requiredOption("--task-id <value>", "Task identifier used by evalpkgs artifact output")
+  .option("--db-path <path>", "SQLite db path (default from TRACKING_STORAGE_DB_PATH or ~/.eval/records.sqlite)")
+  .option("--table <name>", "Result table name (default from RESULT_SQLITE_TABLE or capture_results)")
+  .action(async (cmd: CollectOptions) => {
+    const taskID = validateTaskID(String(cmd.taskId || ""));
+    const dbPath = resolveDBPath(cmd.dbPath);
+    const table = resolveTable(cmd.table);
+
+    const bundleID = process.env.BUNDLE_ID?.trim();
+    const serial = process.env.SerialNumber?.trim();
+    if (!bundleID) {
+      throw new Error("BUNDLE_ID is required in environment");
+    }
+    if (!serial) {
+      throw new Error("SerialNumber is required in environment");
+    }
+
+    const artifactDir = taskArtifactDir(taskID);
+    mkdirSync(artifactDir, { recursive: true });
+    const artifactBefore = snapshotArtifacts(artifactDir);
+    const countBefore = countRows(dbPath, table);
+
+    process.stderr.write(
+      `[collect] start evalpkgs with TaskID=${taskID} BUNDLE_ID=${bundleID} SerialNumber=${serial}\n`,
+    );
+    process.stderr.write(
+      `[collect] sqlite db=${dbPath} table=${table} before_count=${countBefore}\n`,
+    );
+
+    const proc = await runEvalpkgsCollect(taskID, (signal) => {
+      try {
+        const current = countRows(dbPath, table);
+        const currentDelta = current - countBefore;
+        process.stderr.write(
+          `[collect] interrupt=${signal} sqlite db=${dbPath} table=${table} current_count=${current} delta=${currentDelta}\n`,
+        );
+      } catch (err) {
+        process.stderr.write(`[collect] interrupt=${signal} failed to query sqlite count: ${truncateError(err)}\n`);
+      }
+    });
+
+    const countAfter = countRows(dbPath, table);
+    const delta = countAfter - countBefore;
+    process.stderr.write(
+      `[collect] sqlite db=${dbPath} table=${table} after_count=${countAfter} delta=${delta}\n`,
+    );
+
+    const artifactAfter = snapshotArtifacts(artifactDir);
+    if (!hasArtifactDelta(artifactBefore, artifactAfter)) {
+      throw new Error(
+        `TaskID artifact check failed: no new/updated files under ${artifactDir}; evalpkgs must support TaskID output routing`,
+      );
+    }
+
+    if (proc.code !== 0 && !proc.interrupted) {
+      throw new Error(`evalpkgs exited with non-zero code=${proc.code}`);
+    }
+    if (proc.signal && !proc.interrupted) {
+      throw new Error(`evalpkgs terminated by signal=${proc.signal}`);
+    }
+
+    process.stderr.write(
+      `[collect] completed exit_code=${proc.code ?? "null"} signal=${proc.signal ?? "none"} interrupted=${proc.interrupted}\n`,
+    );
+  });
 
 program
   .command("filter")
