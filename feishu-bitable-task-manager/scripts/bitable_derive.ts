@@ -132,7 +132,7 @@ function validSourceItem(item: SourceItem) {
 
 function normalizeActor(actor: string) {
   if (!actor) return "";
-  const replaced = actor.replace(/[，,]+/g, " ");
+  const replaced = actor.replace(/[，,、;；/]+/g, " ");
   return replaced.replace(/\s+/g, " ").trim();
 }
 
