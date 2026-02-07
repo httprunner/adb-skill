@@ -1,24 +1,39 @@
 #!/usr/bin/env node
 import { spawnSync } from "child_process";
 import chalk from "chalk";
+import { Command } from "commander";
 import os from "os";
 
 // ---------- args ----------
-function parseArgs(argv: string[]) {
-  const out: Record<string, string | boolean> = {};
-  for (let i = 0; i < argv.length; i++) {
-    const a = argv[i];
-    if (!a.startsWith("--")) continue;
-    const k = a.slice(2);
-    const next = argv[i + 1];
-    if (!next || next.startsWith("--")) {
-      out[k] = true;
-      continue;
-    }
-    out[k] = next;
-    i++;
-  }
-  return out;
+type CLIOptions = {
+  taskId: string;
+  dbPath: string;
+  threshold: string;
+  dryRun: boolean;
+  logLevel: string;
+  app?: string;
+  bookId?: string;
+  date?: string;
+};
+
+function parseCLI(argv: string[]): CLIOptions {
+  const program = new Command();
+  program
+    .name("run_piracy_pipeline")
+    .description("SQLite-driven piracy clustering and task orchestration")
+    .requiredOption("--task-id <id>", "Parent task TaskID (general search task)")
+    .option("--db-path <path>", "SQLite path", "~/.eval/records.sqlite")
+    .option("--threshold <num>", "Threshold ratio", "0.5")
+    .option("--dry-run", "Compute only, do not write records")
+    .option("--log-level <level>", "Log level: silent|error|info|debug", "info")
+    .option("--app <app>", "Override parent task app")
+    .option("--book-id <id>", "Override parent task book ID")
+    .option("--date <yyyy-mm-dd>", "Override capture day")
+    .showHelpAfterError()
+    .showSuggestionAfterError();
+  program.parse(argv);
+  const opts = program.opts<CLIOptions>();
+  return opts;
 }
 
 function env(name: string, def = "") {
@@ -331,13 +346,13 @@ function firstText(v: any): string {
 
 // ---------- main ----------
 async function main() {
-  const args = parseArgs(process.argv.slice(2));
-  const taskID = parseTaskID(args["task-id"]);
-  const dryRun = Boolean(args["dry-run"]);
-  const threshold = toNumber(args["threshold"], 0.5);
-  const logLevel = parseLogLevel(args["log-level"]);
+  const args = parseCLI(process.argv);
+  const taskID = parseTaskID(args.taskId);
+  const dryRun = Boolean(args.dryRun);
+  const threshold = toNumber(args.threshold, 0.5);
+  const logLevel = parseLogLevel(args.logLevel);
   const logger = createLogger(logLevel, process.stdout, Boolean(process.stdout.isTTY));
-  const dbPath = expandHome(String(args["db-path"] || "~/.eval/records.sqlite"));
+  const dbPath = expandHome(String(args.dbPath || "~/.eval/records.sqlite"));
 
   const feishuAppID = must("FEISHU_APP_ID");
   const feishuAppSecret = must("FEISHU_APP_SECRET");
@@ -397,10 +412,10 @@ async function main() {
   );
   if (!parentRows.length) throw new Error(`parent task not found: ${taskID}`);
   const parent = parentRows[0].fields || {};
-  const parentApp = String(args["app"] || firstText(parent[taskFields.App])).trim();
-  const parentBookID = String(args["book-id"] || firstText(parent[taskFields.BookID])).trim();
+  const parentApp = String(args.app || firstText(parent[taskFields.App])).trim();
+  const parentBookID = String(args.bookId || firstText(parent[taskFields.BookID])).trim();
   const parentParams = String(firstText(parent[taskFields.Params])).trim();
-  const day = String(args["date"] || toDay(firstText(parent[taskFields.Date])) || new Date().toISOString().slice(0, 10));
+  const day = String(args.date || toDay(firstText(parent[taskFields.Date])) || new Date().toISOString().slice(0, 10));
   const dayMs = dayStartMs(day);
   logger.debug("parent task loaded", {
     taskID,
@@ -933,8 +948,15 @@ async function main() {
 }
 
 main().catch((err) => {
-  const args = parseArgs(process.argv.slice(2));
-  const logLevel = parseLogLevel(args["log-level"]);
+  const argv = process.argv;
+  let raw = "";
+  const idx = argv.findIndex((v) => v === "--log-level");
+  if (idx >= 0) raw = argv[idx + 1] || "";
+  if (!raw) {
+    const eqArg = argv.find((v) => v.startsWith("--log-level="));
+    if (eqArg) raw = eqArg.slice("--log-level=".length);
+  }
+  const logLevel = parseLogLevel(raw);
   const logger = createLogger(logLevel, process.stderr, Boolean(process.stderr.isTTY));
   logger.error(err instanceof Error ? err.message : String(err));
   process.exit(1);
