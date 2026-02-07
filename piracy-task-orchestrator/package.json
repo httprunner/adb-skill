@@ -1,0 +1,15 @@
+{
+  "name": "piracy-task-orchestrator-skill",
+  "private": true,
+  "version": "0.1.0",
+  "description": "SQLite-driven piracy clustering, child task creation, and webhook plan creation.",
+  "scripts": {
+    "run": "tsx scripts/run_piracy_pipeline.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.10",
+    "chalk": "^5.3.0",
+    "tsx": "^4.20.3",
+    "typescript": "^5.8.2"
+  }
+}
