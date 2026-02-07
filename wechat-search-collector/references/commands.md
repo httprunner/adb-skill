@@ -7,6 +7,8 @@
 - 所有 `ai-vision` 命令在 `ai-vision` 目录执行。
 - 所有 `feishu-bitable-task-manager` 命令在 `feishu-bitable-task-manager` 目录执行。
 - 所有 `result-bitable-reporter` 命令在 `result-bitable-reporter` 目录执行。
+- 所有 `piracy-task-orchestrator` 命令在 `piracy-task-orchestrator` 目录执行。
+- 所有 `group-webhook-dispatch` 命令在 `group-webhook-dispatch` 目录执行。
 - `TASK_ID` 必须为数字（与 sqlite `TaskID` 列一致）。
 - 截图与相关产物输出目录由 `TASK_ID` 控制：若指定 `TASK_ID` 则写入 `~/.eval/<TASK_ID>/`，未指定则写入 `~/.eval/debug/`。
 - `ai-vision` 会返回已转换的绝对像素坐标，直接用于 `adb_helpers.ts` 操作。
@@ -103,6 +105,28 @@
   `npx tsx scripts/bitable_task.ts update --task-id TASK_ID --status success --completed-at now`
 - 任务失败/中断：
   `npx tsx scripts/bitable_task.ts update --task-id TASK_ID --status failed --completed-at now`
+
+## 综合页任务后置（piracy-task-orchestrator）
+- 以下命令在 `piracy-task-orchestrator` 目录执行。
+- 综合页任务成功后触发盗版编排（SQLite 驱动）：
+  `export FEISHU_APP_ID=...`
+  `export FEISHU_APP_SECRET=...`
+  `export TASK_BITABLE_URL="https://.../base/APP_TOKEN?table=tbl_task"`
+  `export DRAMA_BITABLE_URL="https://.../base/APP_TOKEN?table=tbl_drama"`
+  `export WEBHOOK_BITABLE_URL="https://.../base/APP_TOKEN?table=tbl_webhook"`
+  `npx tsx scripts/run_piracy_pipeline.ts --task-id TASK_ID --db-path ~/.eval/records.sqlite --threshold 0.5`
+
+## Group 任务后置（group-webhook-dispatch）
+- 以下命令在 `group-webhook-dispatch` 目录执行。
+- Group 内任务完成后（个人页/合集/锚点等）触发 ready 检查与 webhook 推送：
+  `export FEISHU_APP_ID=...`
+  `export FEISHU_APP_SECRET=...`
+  `export TASK_BITABLE_URL="https://.../base/APP_TOKEN?table=tbl_task"`
+  `export WEBHOOK_BITABLE_URL="https://.../base/APP_TOKEN?table=tbl_webhook"`
+  `export CRAWLER_SERVICE_BASE_URL="http://content-web-crawler:8000"`
+  `npx tsx scripts/dispatch_webhook.ts --task-id TASK_ID --db-path ~/.eval/records.sqlite`
+- 单次补偿（run-once reconcile）：
+  `npx tsx scripts/reconcile_webhook.ts --date 2026-02-07 --limit 50 --db-path ~/.eval/records.sqlite`
 
 ## 弹窗处理
 - 截图后让 ai-vision 识别关闭按钮（优先关闭或取消）：

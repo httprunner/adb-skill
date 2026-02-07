@@ -1,6 +1,6 @@
 ---
 name: wechat-search-collector
-description: 微信视频号搜索与结果遍历的自动化采集流程（Android），支持综合页搜索、个人页搜索与全量搜索结果遍历。
+description: 微信视频号搜索与结果遍历的自动化采集流程（Android），支持综合页搜索、个人页搜索等场景。
 ---
 
 # 微信视频号搜索
@@ -14,6 +14,7 @@ description: 微信视频号搜索与结果遍历的自动化采集流程（Andr
 - 具体命令已抽离到 `references/commands.md`，流程中只描述关键步骤。
 - 如需从飞书多维表格拉取搜索任务，使用 `feishu-bitable-task-manager` 获取任务参数后再进入对应流程。
 - 结果采集与上报使用 `result-bitable-reporter`：前置必须启动 `collect`，收尾必须执行 `collect-stop` 与 `report`。
+- 场景结束后，需根据场景类型执行相应的后置处理：`piracy-task-orchestrator`、`group-webhook-dispatch`。
 
 ## 前置处理
 - 设备预检：确认驱动与依赖可用，读取环境变量 `SerialNumber` 获取设备 serial。
@@ -61,6 +62,10 @@ description: 微信视频号搜索与结果遍历的自动化采集流程（Andr
 - 频率要求：在结果页滚动过程中，每滑动 5 次检测一次是否已滑动到底。
 - 确认触底后：点击搜索框确保输入框激活 -> 清空 -> 输入下一个关键词 -> 触发搜索，直到完成所有关键词的遍历。
 
+### 7. 场景后置处理
+- 当综合页搜索任务成功完成后，调用 `piracy-task-orchestrator`，实现盗版聚类筛查、子任务创建与 webhook 推送计划创建。
+- 若综合页搜索流程失败或中断，不调用该编排器。
+
 ## 个人页搜索流程
 适用于“先进入某账号个人页，再在个人页内检索多个关键词并遍历结果”的需求。
 
@@ -90,13 +95,16 @@ description: 微信视频号搜索与结果遍历的自动化采集流程（Andr
 - 频率要求：在结果页滚动过程中，每滑动 5 次检测一次是否已滑动到底。
 - 每个关键词搜索前确认仍在该账号个人页；若误退出则重进个人页后继续。
 
+### 7. 场景后置处理
+- 个人页任务结束并进入终态（`success/error`）后，若任务存在 `GroupID`，调用 `group-webhook-dispatch` 做“是否就绪 + webhook 推送”。
+
 ## 任务结束后的收尾逻辑
 - 若 `claim` 未获取任务，直接结束不做收尾。
 - 所有关键词遍历完成后，使用 `android-adb` 的 `back-home` 命令返回手机桌面
 - 无论任务成功、失败或中断，都必须执行以下动作（finally 语义）：
   - 调用 `result-bitable-reporter` 的 `collect-stop` 结束当前设备采集，并打印采集统计。
   - 调用 `result-bitable-reporter` 的 `report`，并带 `--task-id <TASK_ID>`，仅上报当前任务在 `capture_results` 中 `reported in (0,-1)` 的数据到飞书多维表格采集结果表。
-- 调用 `feishu-bitable-task-manager` 更新该 `TaskID` 的字段：`Status` -> `success/failed`（基于任务执行结果）、`EndAt` ->`now`
+- 调用 `feishu-bitable-task-manager` 更新该 `TaskID` 的字段：`Status` -> `success/failed/error`（基于任务执行结果）、`EndAt` ->`now`
 
 ## 备注与排障
 - 点击不准：重新截图，让 ai-vision 提供更精确坐标（不要改用 `dump-ui`）。

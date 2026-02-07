@@ -1,0 +1,4 @@
+interface:
+  display_name: "Group Webhook Dispatch"
+  short_description: "Dispatch and reconcile group webhooks."
+  default_prompt: "Use $group-webhook-dispatch to dispatch or reconcile group webhook pushes for completed tasks."
