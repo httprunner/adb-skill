@@ -14,7 +14,7 @@ description: 微信视频号搜索与结果遍历的自动化采集流程（Andr
 - 具体命令已抽离到 `references/commands.md`，流程中只描述关键步骤。
 - 如需从飞书多维表格拉取搜索任务，使用 `feishu-bitable-task-manager` 获取任务参数后再进入对应流程。
 - 结果采集与上报使用 `result-bitable-reporter`：前置必须启动 `collect`，收尾必须执行 `collect-stop` 与 `report`。
-- 场景结束后，需根据场景类型执行相应的后置处理：`piracy-task-orchestrator`、`group-webhook-dispatch`。
+- 场景结束后，需根据场景类型执行相应的后置处理：`piracy-handler`、`group-webhook-dispatch`。
 
 ## 前置处理
 - 设备预检：确认驱动与依赖可用，读取环境变量 `SerialNumber` 获取设备 serial。
@@ -63,7 +63,7 @@ description: 微信视频号搜索与结果遍历的自动化采集流程（Andr
 - 确认触底后：点击搜索框确保输入框激活 -> 清空 -> 输入下一个关键词 -> 触发搜索，直到完成所有关键词的遍历。
 
 ### 7. 场景后置处理
-- 当综合页搜索任务成功完成后，调用 `piracy-task-orchestrator`，实现盗版聚类筛查、子任务创建与 webhook 推送计划创建。
+- 当综合页搜索任务成功完成后，调用 `piracy-handler`，实现盗版聚类筛查、子任务创建与 webhook 推送计划创建。
 - 若综合页搜索流程失败或中断，不调用该编排器。
 
 ## 个人页搜索流程

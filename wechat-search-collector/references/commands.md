@@ -7,7 +7,7 @@
 - 所有 `ai-vision` 命令在 `ai-vision` 目录执行。
 - 所有 `feishu-bitable-task-manager` 命令在 `feishu-bitable-task-manager` 目录执行。
 - 所有 `result-bitable-reporter` 命令在 `result-bitable-reporter` 目录执行。
-- 所有 `piracy-task-orchestrator` 命令在 `piracy-task-orchestrator` 目录执行。
+- 所有 `piracy-handler` 命令在 `piracy-handler` 目录执行。
 - 所有 `group-webhook-dispatch` 命令在 `group-webhook-dispatch` 目录执行。
 - `TASK_ID` 必须为数字（与 sqlite `TaskID` 列一致）。
 - 截图与相关产物输出目录由 `TASK_ID` 控制：若指定 `TASK_ID` 则写入 `~/.eval/<TASK_ID>/`，未指定则写入 `~/.eval/debug/`。
@@ -29,7 +29,7 @@
 - 启动后台采集（前置步骤，开始微信搜索前执行）：
   `export BUNDLE_ID=com.tencent.mm`
   `export SerialNumber=SERIAL`
-  `npx tsx scripts/result_reporter.ts collect --task-id TASK_ID --db-path ~/.eval/records.sqlite --table capture_results`
+  `npx tsx scripts/result_reporter.ts collect-start --task-id TASK_ID --db-path ~/.eval/records.sqlite --table capture_results`
 - 停止采集（收尾步骤，任务结束/异常中断都执行）：
   `SerialNumber=SERIAL npx tsx scripts/result_reporter.ts collect-stop`
 - 上报采集结果到飞书多维表格采集结果表（收尾步骤）：
@@ -106,15 +106,17 @@
 - 任务失败/中断：
   `npx tsx scripts/bitable_task.ts update --task-id TASK_ID --status failed --completed-at now`
 
-## 综合页任务后置（piracy-task-orchestrator）
-- 以下命令在 `piracy-task-orchestrator` 目录执行。
-- 综合页任务成功后触发盗版编排（SQLite 驱动）：
+## 综合页任务后置（piracy-handler）
+- 以下命令在 `piracy-handler` 目录执行（默认 detect 输出到 `~/.eval/<TaskID>/detect.json`，避免并行冲突）。
+- 综合页任务成功后触发盗版编排（SQLite 驱动，三步）：
   `export FEISHU_APP_ID=...`
   `export FEISHU_APP_SECRET=...`
   `export TASK_BITABLE_URL="https://.../base/APP_TOKEN?table=tbl_task"`
   `export DRAMA_BITABLE_URL="https://.../base/APP_TOKEN?table=tbl_drama"`
   `export WEBHOOK_BITABLE_URL="https://.../base/APP_TOKEN?table=tbl_webhook"`
-  `npx tsx scripts/run_piracy_pipeline.ts --task-id TASK_ID --db-path ~/.eval/records.sqlite --threshold 0.5`
+  `npx tsx scripts/piracy_detect.ts --task-id TASK_ID --db-path ~/.eval/records.sqlite --threshold 0.5`
+  `npx tsx scripts/piracy_create_subtasks.ts --task-id TASK_ID`
+  `npx tsx scripts/piracy_upsert_webhook_plans.ts --task-id TASK_ID`
 
 ## Group 任务后置（group-webhook-dispatch）
 - 以下命令在 `group-webhook-dispatch` 目录执行。
