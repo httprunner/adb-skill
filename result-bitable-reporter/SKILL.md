@@ -1,6 +1,6 @@
 ---
 name: result-bitable-reporter
-description: "Collect app events via evalpkgs into sqlite, then filter/report capture_results to Feishu Bitable with retry-safe writeback. Use for collect/collect-stop/filter/report/retry-reset workflows."
+description: "Collect app events via evalpkgs into sqlite, then filter/report capture_results to Feishu Bitable with retry-safe writeback. Use for collect-start/collect-stop/filter/report/retry-reset workflows."
 ---
 
 # Result Bitable Reporter
@@ -10,7 +10,7 @@ Use this skill for a deterministic `sqlite -> Feishu` result pipeline around `ca
 ## Workflow
 
 1) Optional data collection:
-- `collect`: start background `evalpkgs run` for one device (`SerialNumber`) with `TaskID` (digits only).
+- `collect-start`: start background `evalpkgs run` for one device (`SerialNumber`) with `TaskID` (digits only).
 - `collect-stop`: stop that collector and print summary metrics (`delta`, `task_delta`, `records_jsonl`, `tracking_events`, `runtime_sec`).
 
 2) Data selection:
@@ -37,7 +37,7 @@ npx tsx scripts/result_reporter.ts <subcommand> [flags]
 ```
 
 Subcommands:
-- `collect`
+- `collect-start`
 - `collect-stop`
 - `filter`
 - `report`
@@ -51,5 +51,5 @@ Required env by phase:
 ## Resources
 
 - `scripts/result_reporter.ts`: executable source of truth for flags and behavior.
-- `references/sqlite-and-field-mapping.md`: sqlite schema, collect/collect-stop semantics, SQL operations, command examples.
+- `references/sqlite-and-field-mapping.md`: sqlite schema, collect-start/collect-stop semantics, SQL operations, command examples.
 - `references/feishu-api-and-errors.md`: Feishu APIs, URL rules, failures, field mapping env overrides, command examples.

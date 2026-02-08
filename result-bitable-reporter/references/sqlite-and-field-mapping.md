@@ -4,7 +4,7 @@
 
 - DB path default: `$HOME/.eval/records.sqlite`
 - Table default: `capture_results`
-- `collect` mode also writes to the same shared sqlite path unless `--db-path` overrides it.
+- `collect-start` mode also writes to the same shared sqlite path unless `--db-path` overrides it.
 - Override via env:
   - `TRACKING_STORAGE_DB_PATH`
   - `RESULT_SQLITE_TABLE`
@@ -45,10 +45,10 @@ For task-scoped workflows, pass `--task-id <TASK_ID>` so only current-task rows 
 
 ## Collect Mode Validation
 
-`collect` and `collect-stop` perform a non-writeback validation around `capture_results`:
+`collect-start` and `collect-stop` perform a non-writeback validation around `capture_results`:
 
-- `collect` records `before_count` and starts eval collection in background
-- `collect` enforces one active collector process per `SerialNumber` (old one will be stopped first)
+- `collect-start` records `before_count` and starts eval collection in background
+- `collect-start` enforces one active collector process per `SerialNumber` (old one will be stopped first)
 - `collect-stop` terminates collector by `SerialNumber`
 - `collect-stop` queries `after_count` and prints:
   - `delta`: total row increment in table
@@ -57,7 +57,7 @@ For task-scoped workflows, pass `--task-id <TASK_ID>` so only current-task rows 
   - `tracking_events`: line count in `~/.eval/<TaskID>/*_track.jsonl`
   - `runtime_sec`: collection runtime in seconds
 
-`collect` does not update `reported/reported_at/report_error`; those fields remain managed by `report` and `retry-reset`.
+`collect-start` does not update `reported/reported_at/report_error`; those fields remain managed by `report` and `retry-reset`.
 
 ## Command Examples
 
@@ -66,7 +66,7 @@ Run real-time collection in background:
 ```bash
 export BUNDLE_ID=com.tencent.mm
 export SerialNumber=1fa20bb
-npx tsx scripts/result_reporter.ts collect \
+npx tsx scripts/result_reporter.ts collect-start \
   --task-id 20260206001 \
   --db-path ~/.eval/records.sqlite \
   --table capture_results

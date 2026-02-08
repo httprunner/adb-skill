@@ -521,7 +521,7 @@ async function stopCollectorsForSerial(serial: string, statePID?: number): Promi
     pids.add(pid);
   }
   for (const pid of pids) {
-    process.stderr.write(`[collect] stopping existing collector for SerialNumber=${serial}, pid=${pid}\n`);
+    process.stderr.write(`[collect-start] stopping existing collector for SerialNumber=${serial}, pid=${pid}\n`);
     await stopCollectorProcess(pid);
   }
   clearCollectState(serial);
@@ -919,7 +919,7 @@ function buildFilterOptions(cmd: {
 }
 
 program
-  .command("collect")
+  .command("collect-start")
   .description("Start evalpkgs real-time collection in background")
   .requiredOption("--task-id <value>", "Task identifier used by evalpkgs artifact output (digits only)")
   .option("--db-path <path>", "SQLite db path (default from TRACKING_STORAGE_DB_PATH or ~/.eval/records.sqlite)")
@@ -947,11 +947,9 @@ program
     await stopCollectorsForSerial(serial, existing?.pid);
 
     process.stderr.write(
-      `[collect] start evalpkgs in background with TaskID=${taskID} BUNDLE_ID=${bundleID} SerialNumber=${serial}\n`,
+      `[collect-start] start evalpkgs in background with TaskID=${taskID} BUNDLE_ID=${bundleID} SerialNumber=${serial}\n`,
     );
-    process.stderr.write(
-      `[collect] sqlite db=${dbPath} table=${table} before_count=${countBefore}\n`,
-    );
+    process.stderr.write(`[collect-start] sqlite db=${dbPath} table=${table} before_count=${countBefore}\n`);
 
     const child = spawn("evalpkgs", ["run", "--log-level", "debug", "--bundleID", bundleID, "--did", serial], {
       detached: true,
@@ -990,7 +988,7 @@ program
     });
 
     process.stderr.write(
-      `[collect] started pid=${childPid}; stop with: SerialNumber=${serial} npx tsx scripts/result_reporter.ts collect-stop\n`,
+      `[collect-start] started pid=${childPid}; stop with: SerialNumber=${serial} npx tsx scripts/result_reporter.ts collect-stop\n`,
     );
   });
 
