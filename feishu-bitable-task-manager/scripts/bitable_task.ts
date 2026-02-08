@@ -502,7 +502,13 @@ async function FetchTasks(opts: any) {
   const statuses = parseCSVList(opts.status || "");
   const statusList = statuses.length ? statuses : ["pending"];
   const limit = Number(opts.limit || 0);
-  const res = await FetchTasksForScenesAndStatuses(opts, sceneList, statusList, limit > 0 ? limit : 0);
+  const hasDirectIDFilter =
+    (opts.task_id != null && String(opts.task_id).trim() !== "") ||
+    (opts.biz_task_id != null && String(opts.biz_task_id).trim() !== "") ||
+    (opts.group_id != null && String(opts.group_id).trim() !== "");
+  const res = hasDirectIDFilter
+    ? await FetchTasksForStatuses(opts, statusList, limit > 0 ? limit : 0)
+    : await FetchTasksForScenesAndStatuses(opts, sceneList, statusList, limit > 0 ? limit : 0);
   if ("err" in res) return res.code;
   const tasks = res.tasks;
   const totalElapsed = res.elapsedSeconds;
