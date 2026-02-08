@@ -67,6 +67,13 @@ Use `npx tsx` so you can execute without building a binary:
 npx tsx scripts/bitable_task.ts <subcommand> [flags]
 ```
 
+Fetch drama meta by `短剧id` (BookID) from `DRAMA_BITABLE_URL`：
+
+```bash
+npx tsx scripts/bitable_lookup.ts fetch --bitable-url "<DRAMA_BITABLE_URL>" --book-ids "id1"
+npx tsx scripts/bitable_lookup.ts fetch --bitable-url "<DRAMA_BITABLE_URL>" --book-ids "id1,id2"
+```
+
 ## Examples
 
 ```bash
@@ -76,8 +83,10 @@ export TASK_BITABLE_URL="https://.../base/APP_TOKEN?table=TABLE_ID&view=VIEW_ID"
 npx tsx scripts/bitable_task.ts fetch --app com.smile.gifmaker --scene 综合页搜索 --status pending --date Today --limit 10
 npx tsx scripts/bitable_task.ts fetch --app com.smile.gifmaker --scene 综合页搜索 --status pending,failed --date Today --limit 10
 npx tsx scripts/bitable_task.ts fetch --app com.smile.gifmaker --scene 综合页搜索 --status pending --date 2026-02-05 --limit 10
-npx tsx scripts/bitable_task.ts fetch --task-id 1326 --raw
+npx tsx scripts/bitable_task.ts fetch --task-ids "1326" --raw
+npx tsx scripts/bitable_task.ts fetch --task-ids "1326,1327" --status Any --date Any --jsonl --log-json
 npx tsx scripts/bitable_task.ts fetch --biz-task-id ext-20240101-001 --raw
+npx tsx scripts/bitable_task.ts fetch --group-ids "app_bid_uid1,app_bid_uid2" --date 2026-02-07 --status Any --scene Any --jsonl --log-json
 ```
 Use `--raw` when you need the `record_id` for follow-up updates.
 
