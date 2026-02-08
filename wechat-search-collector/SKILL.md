@@ -30,7 +30,7 @@ cd ~/.agents/skills/wechat-search-collector
 1) 进入某个关键词结果页后，记录基线 `LAST_COUNT`：
    `LAST_COUNT="$(REPORT stat --task-id <TASK_ID>)"`
 2) 循环执行直到触底：
-   - 滑动 5 次：`ADB -s <SERIAL> swipe 540 1800 540 400 --duration-ms 800`（循环 5 次）
+   - 滑动 5 次：`ADB -s <SERIAL> swipe 540 1800 540 400 --duration-ms 800`（循环 5 次；每次滑动后随机等待 500~1000ms）
    - 查询当前总行数：`CUR_COUNT="$(REPORT stat --task-id <TASK_ID>)"`
    - 若 `CUR_COUNT == LAST_COUNT` 连续出现 `N` 次（建议 `N=3`），判定触底；否则更新 `LAST_COUNT=CUR_COUNT` 并继续。
 3) sqlite 判定不可用时，用 `ai-vision assert` 二值兜底（不确定必须判定为否），见 `references/commands.md`。

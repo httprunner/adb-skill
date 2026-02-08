@@ -85,9 +85,9 @@ WEBHOOK_RECONCILE() { (cd "$WEBHOOK_DIR" && npx tsx scripts/reconcile_webhook.ts
 
 ## 结果滚动到底
 - 滑动一屏：
-  `ADB -s SERIAL swipe 540 1800 540 400 800`
+  `ADB -s SERIAL swipe 540 1800 540 400 300`
 - 触底判定（推荐：基于采集埋点增量，而非视觉判断）：
-  - 思路：每滑动 5 次后，用 `result-bitable-reporter stat` 查询当前 `TaskID` 的总行数是否增加；连续多次无新增则判定触底。
+  - 思路：每滑动 5 次后，用 `result-bitable-reporter stat` 查询当前 `TaskID` 的总行数是否增加；每次滑动后随机等待 500~1000ms，连续多次无新增则判定触底。
   - 示例（bash 伪代码，关键点是“滑动 5 次 -> 查一次”）：
     ```bash
     TASK_ID="20260206001"
@@ -97,8 +97,8 @@ WEBHOOK_RECONCILE() { (cd "$WEBHOOK_DIR" && npx tsx scripts/reconcile_webhook.ts
     LAST_COUNT="$(REPORT stat --task-id "$TASK_ID")"
     while true; do
       for i in {1..5}; do
-        ADB -s SERIAL swipe 540 1800 540 400 --duration-ms 800
-        sleep 0.2
+        ADB -s SERIAL swipe 540 1800 540 400 --duration-ms 300
+        sleep "$(awk 'BEGIN{srand(); printf "%.3f\n", 0.5 + rand() * 0.5}')"
       done
 
       CUR_COUNT="$(REPORT stat --task-id "$TASK_ID")"
