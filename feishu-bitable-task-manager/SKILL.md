@@ -42,7 +42,9 @@ npx tsx scripts/bitable_task.ts <subcommand> [flags]
 - Prefer fetching by `--task-id` / `--biz-task-id` when possible (it overrides `--app/--scene/--status/--date`).
 - Ignore view filtering by default; use view filtering only when explicitly enabled (see `references/task-fetch.md`).
 - Keep only decoded rows with `TaskID != 0` and at least one of `Params/ItemID/BookID/URL/UserID/UserName`.
-- Allow comma-separated priority lists for `--status` / `--scene` (fill earlier values first when `--limit` is set).
+- Allow comma-separated priority lists for `--status` / `--scene`.
+- `fetch` supports `--limit`; earlier scene/status values are filled first when `--limit` is set.
+- `claim` is single-task only; do not use `--limit`. `--candidate-limit` only controls candidate attempts (see `references/task-claim.md`).
 - `fetch` and `claim` both split comma-separated `--scene` values and query each scene in order (do not treat the full CSV as one literal scene).
 - When ingesting JSON/JSONL, pass through keys that match column names; map `CDNURL`/`cdn_url` into `Extra` when present.
 
@@ -64,8 +66,11 @@ npx tsx scripts/bitable_task.ts claim \
   --scene 个人页搜索,综合页搜索 \
   --device-serial <serial> \
   --status pending,failed \
-  --date Today
+  --date Today \
+  --candidate-limit 5
 ```
+
+Claim behavior details are in `references/task-claim.md`.
 
 ### Update
 

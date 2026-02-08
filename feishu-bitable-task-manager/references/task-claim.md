@@ -35,5 +35,11 @@ npx tsx scripts/bitable_task.ts claim \
   --device-serial <serial> \
   --status pending,failed \
   --date Today \
+  --candidate-limit 5 \
   --log-level debug
 ```
+
+Notes:
+- `claim` always returns at most one task; `--limit` is not a valid flag for this subcommand.
+- `--candidate-limit` controls how many candidate rows are attempted in this run, not how many tasks are returned (default is `5`).
+- Do not infer `--candidate-limit 1` from "claim one task"; these are independent semantics.
