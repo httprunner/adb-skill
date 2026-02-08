@@ -15,6 +15,20 @@ export CRAWLER_SERVICE_BASE_URL="http://content-web-crawler:8000"
 npx tsx scripts/dispatch_webhook.ts --task-id 180413
 ```
 
+## Webhook 计划 upsert（创建/更新）
+
+从 JSONL 批量 upsert（按 `BizType + GroupID + Date`）：
+
+```bash
+export FEISHU_APP_ID=...
+export FEISHU_APP_SECRET=...
+export WEBHOOK_BITABLE_URL="https://.../base/...?...table=tbl_webhook"
+
+cat <<'JSONL' | npx tsx scripts/upsert_webhook_plan.ts --input -
+{"group_id":"快手_123_uid_xxx","date":"2026-02-07","biz_type":"piracy_general_search","task_ids":[180413,180414],"drama_info":"{\"DramaID\":\"123\"}"}
+JSONL
+```
+
 ## 指定 GroupID
 
 ```bash

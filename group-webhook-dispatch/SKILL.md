@@ -19,6 +19,21 @@ description: Group 任务完成后的 webhook 推送编排：事件触发即时�
 npx tsx scripts/dispatch_webhook.ts --task-id <TASK_ID>
 ```
 
+## Webhook 计划 upsert
+
+当你需要为某个 Group/日期创建或更新 webhook 推送计划（写入 `WEBHOOK_BITABLE_URL`）时使用。
+
+```bash
+npx tsx scripts/upsert_webhook_plan.ts --input <JSON/JSONL_FILE>
+```
+
+输入 item 约定（JSON/JSONL）：
+- `group_id`（必填）
+- `date`（必填，`YYYY-MM-DD`）
+- `biz_type`（可选，默认 `piracy_general_search`）
+- `task_ids`（必填，数组）
+- `drama_info`（可选，JSON 字符串）
+
 环境变量：
 - `FEISHU_APP_ID`, `FEISHU_APP_SECRET`
 - `TASK_BITABLE_URL`, `WEBHOOK_BITABLE_URL`
